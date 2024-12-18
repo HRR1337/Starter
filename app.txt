@@ -1,0 +1,2638 @@
+Traits/GenerateSlug.php
+
+---content---
+
+<?php
+
+namespace App\Traits;
+
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+
+trait GenerateSlug
+{
+    protected function generateSlug($name, $tableName)
+    {
+        $slug = Str::slug($name, '-');
+
+        $allSlugs = DB::table($tableName)
+            ->select('slug')
+            ->where('slug', 'like', $slug.'%')
+            ->get();
+
+        if (! $allSlugs->contains('slug', $slug)) {
+            return $slug;
+        }
+
+        for ($i = 1; $i <= 100; $i++) {
+            $newSlug = $slug.'-'.$i;
+
+            if (! $allSlugs->contains('slug', $newSlug)) {
+                return $newSlug;
+            }
+        }
+    }
+}
+
+
+Providers/AppServiceProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        Model::unguard();
+    }
+}
+
+
+Providers/AuthServiceProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers;
+
+// use Illuminate\Support\Facades\Gate;
+use App\Policies\ExceptionPolicy;
+use BezhanSalleh\FilamentExceptions\Models\Exception;
+use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+
+class AuthServiceProvider extends ServiceProvider
+{
+    /**
+     * The model to policy mappings for the application.
+     *
+     * @var array<class-string, class-string>
+     */
+    protected $policies = [
+        Exception::class => ExceptionPolicy::class,
+    ];
+
+    /**
+     * Register any authentication / authorization services.
+     */
+    public function boot(): void
+    {
+        //
+    }
+}
+
+
+Providers/RouteServiceProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+
+class RouteServiceProvider extends ServiceProvider
+{
+    /**
+     * The path to your application's "home" route.
+     *
+     * Typically, users are redirected here after authentication.
+     *
+     * @var string
+     */
+    public const HOME = '/home';
+
+    /**
+     * Define your route model bindings, pattern filters, and other route configuration.
+     */
+    public function boot(): void
+    {
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        $this->routes(function () {
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/api.php'));
+
+            Route::middleware('web')
+                ->group(base_path('routes/web.php'));
+        });
+    }
+}
+
+
+Providers/BroadcastServiceProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\ServiceProvider;
+
+class BroadcastServiceProvider extends ServiceProvider
+{
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        Broadcast::routes();
+
+        require base_path('routes/channels.php');
+    }
+}
+
+
+Providers/EventServiceProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
+use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
+use Illuminate\Support\Facades\Event;
+
+class EventServiceProvider extends ServiceProvider
+{
+    /**
+     * The event to listener mappings for the application.
+     *
+     * @var array<class-string, array<int, class-string>>
+     */
+    protected $listen = [
+        Registered::class => [
+            SendEmailVerificationNotification::class,
+        ],
+    ];
+
+    /**
+     * Register any events for your application.
+     */
+    public function boot(): void
+    {
+        //
+    }
+
+    /**
+     * Determine if events and listeners should be automatically discovered.
+     */
+    public function shouldDiscoverEvents(): bool
+    {
+        return false;
+    }
+}
+
+
+Providers/Filament/AdminPanelProvider.php
+
+---content---
+
+<?php
+
+namespace App\Providers\Filament;
+
+use Filament\Pages;
+use Filament\Panel;
+use App\Models\Team;
+use Filament\Widgets;
+use Filament\PanelProvider;
+use App\Filament\Pages\Auth\Login;
+use Filament\Support\Colors\Color;
+use Filament\Http\Middleware\Authenticate;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\AuthenticateSession;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
+use Amendozaaguiar\FilamentRouteStatistics\FilamentRouteStatisticsPlugin;
+
+
+
+class AdminPanelProvider extends PanelProvider
+{
+    public function panel(Panel $panel): Panel
+    {
+        return $panel
+            ->default()
+            ->id('admin')
+            ->path('admin')
+            ->login(Login::class)
+            ->colors([
+                'danger' => Color::Rose,
+                'gray' => Color::Gray,
+                'info' => Color::Blue,
+                'primary' => Color::Indigo,
+                'success' => Color::Emerald,
+                'warning' => Color::Orange,
+            ])
+            ->plugins([
+                \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
+                \BezhanSalleh\FilamentExceptions\FilamentExceptionsPlugin::make(),
+                FilamentBackgroundsPlugin::make(),
+                FilamentRouteStatisticsPlugin::make(),
+                \Hasnayeen\Themes\ThemesPlugin::make(),
+            ])
+            ->brandLogo(fn () => view('components.logo'))
+            ->font('Poppins')
+            ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
+            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
+            ->pages([
+                Pages\Dashboard::class,
+            ])
+            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            ->widgets([
+                Widgets\AccountWidget::class,
+                // Widgets\FilamentInfoWidget::class,
+            ])
+            ->middleware([
+                EncryptCookies::class,
+                AddQueuedCookiesToResponse::class,
+                StartSession::class,
+                AuthenticateSession::class,
+                ShareErrorsFromSession::class,
+                VerifyCsrfToken::class,
+                SubstituteBindings::class,
+                DisableBladeIconComponents::class,
+                DispatchServingFilamentEvent::class,
+            ])
+            ->tenantMiddleware([
+                \Hasnayeen\Themes\Http\Middleware\SetTheme::class,
+            ])
+            ->authMiddleware([
+                Authenticate::class,
+            ])
+            ->tenant(
+                Team::class,
+                slugAttribute: 'slug'
+            );
+    }
+}
+
+
+Models/Team.php
+
+---content---
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class Team extends Model
+{
+    use HasFactory;
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class);
+    }
+}
+
+
+Models/User.php
+
+---content---
+
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Panel;
+use Filament\Facades\Filament;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Collection;
+use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notifiable;
+use Filament\Models\Contracts\HasTenants;
+use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class User extends Authenticatable implements HasTenants
+{
+    use HasApiTokens, HasFactory, Notifiable, HasRoles, HasPanelShield;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    public function getTenants(Panel $panel): Collection
+    {
+        return $this->teams;
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class);
+    }
+
+    public function canAccessTenant(Model $tenant): bool
+    {
+        return $this->teams->contains($tenant);
+    }
+
+    public function team()
+    {
+        return $this->teams()
+            ->where('team_id', Filament::getTenant()->id);
+    }
+}
+
+Exceptions/Handler.php
+
+---content---
+
+<?php
+
+namespace App\Exceptions;
+
+use Throwable;
+use BezhanSalleh\FilamentExceptions\FilamentExceptions;
+use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+
+class Handler extends ExceptionHandler
+{
+    /**
+     * The list of the inputs that are never flashed to the session on validation exceptions.
+     *
+     * @var array<int, string>
+     */
+    protected $dontFlash = [
+        'current_password',
+        'password',
+        'password_confirmation',
+    ];
+
+    /**
+     * Register the exception handling callbacks for the application.
+     */
+    public function register(): void
+    {
+        $this->reportable(function (Throwable $e) {
+            if ($this->shouldReport($e)) {
+                FilamentExceptions::report($e);
+            }
+        });
+    }
+}
+
+
+Policies/RolePolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class RolePolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->can('view_any_shield::role');
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function view(User $user, Role $role): bool
+    {
+        return $user->can('view_shield::role');
+    }
+
+    /**
+     * Determine whether the user can create models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('create_shield::role');
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function update(User $user, Role $role): bool
+    {
+        return $user->can('update_shield::role');
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function delete(User $user, Role $role): bool
+    {
+        return $user->can('delete_shield::role');
+    }
+
+    /**
+     * Determine whether the user can bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('delete_any_shield::role');
+    }
+
+    /**
+     * Determine whether the user can permanently delete.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function forceDelete(User $user, Role $role): bool
+    {
+        return $user->can('{{ ForceDelete }}');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('{{ ForceDeleteAny }}');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function restore(User $user, Role $role): bool
+    {
+        return $user->can('{{ Restore }}');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('{{ RestoreAny }}');
+    }
+
+    /**
+     * Determine whether the user can replicate.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Spatie\Permission\Models\Role  $role
+     * @return bool
+     */
+    public function replicate(User $user, Role $role): bool
+    {
+        return $user->can('{{ Replicate }}');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('{{ Reorder }}');
+    }
+
+}
+
+
+Policies/UserPolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class UserPolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->can('view_any_user');
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function view(User $user): bool
+    {
+        return $user->can('view_user');
+    }
+
+    /**
+     * Determine whether the user can create models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('create_user');
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function update(User $user): bool
+    {
+        return $user->can('update_user');
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function delete(User $user): bool
+    {
+        return $user->can('delete_user');
+    }
+
+    /**
+     * Determine whether the user can bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('delete_any_user');
+    }
+
+    /**
+     * Determine whether the user can permanently delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDelete(User $user): bool
+    {
+        return $user->can('force_delete_user');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('force_delete_any_user');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restore(User $user): bool
+    {
+        return $user->can('restore_user');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('restore_any_user');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function replicate(User $user): bool
+    {
+        return $user->can('replicate_user');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('reorder_user');
+    }
+}
+
+
+Policies/TeamPolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+use App\Models\Team;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class TeamPolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->can('view_any_team');
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function view(User $user, Team $team): bool
+    {
+        return $user->can('view_team');
+    }
+
+    /**
+     * Determine whether the user can create models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('create_team');
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function update(User $user, Team $team): bool
+    {
+        return $user->can('update_team');
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function delete(User $user, Team $team): bool
+    {
+        return $user->can('delete_team');
+    }
+
+    /**
+     * Determine whether the user can bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('delete_any_team');
+    }
+
+    /**
+     * Determine whether the user can permanently delete.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function forceDelete(User $user, Team $team): bool
+    {
+        return $user->can('force_delete_team');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('force_delete_any_team');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function restore(User $user, Team $team): bool
+    {
+        return $user->can('restore_team');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('restore_any_team');
+    }
+
+    /**
+     * Determine whether the user can replicate.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \App\Models\Team  $team
+     * @return bool
+     */
+    public function replicate(User $user, Team $team): bool
+    {
+        return $user->can('replicate_team');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('reorder_team');
+    }
+
+}
+
+
+Policies/RouteStatisticPolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+use Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class RouteStatisticPolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->can('view_any_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function view(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('view_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can create models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('create_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function update(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('update_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function delete(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('delete_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('delete_any_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can permanently delete.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function forceDelete(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('force_delete_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('force_delete_any_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function restore(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('restore_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('restore_any_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can replicate.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic  $routeStatistic
+     * @return bool
+     */
+    public function replicate(User $user, RouteStatistic $routeStatistic): bool
+    {
+        return $user->can('replicate_route::statistics');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('reorder_route::statistics');
+    }
+
+}
+
+
+Policies/ExceptionPolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+use BezhanSalleh\FilamentExceptions\Models\Exception;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class ExceptionPolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->can('view_any_exception');
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function view(User $user, Exception $exception): bool
+    {
+        return $user->can('view_exception');
+    }
+
+    /**
+     * Determine whether the user can create models.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function create(User $user): bool
+    {
+        return $user->can('create_exception');
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function update(User $user, Exception $exception): bool
+    {
+        return $user->can('update_exception');
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function delete(User $user, Exception $exception): bool
+    {
+        return $user->can('delete_exception');
+    }
+
+    /**
+     * Determine whether the user can bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('delete_any_exception');
+    }
+
+    /**
+     * Determine whether the user can permanently delete.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function forceDelete(User $user, Exception $exception): bool
+    {
+        return $user->can('force_delete_exception');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('force_delete_any_exception');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function restore(User $user, Exception $exception): bool
+    {
+        return $user->can('restore_exception');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('restore_any_exception');
+    }
+
+    /**
+     * Determine whether the user can replicate.
+     *
+     * @param  \App\Models\User  $user
+     * @param  \BezhanSalleh\FilamentExceptions\Models\Exception  $exception
+     * @return bool
+     */
+    public function replicate(User $user, Exception $exception): bool
+    {
+        return $user->can('replicate_exception');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('reorder_exception');
+    }
+
+}
+
+
+Filament/Resources/UserResource.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources;
+
+use Filament\Forms;
+use App\Models\User;
+use Filament\Tables;
+use Filament\Forms\Form;
+use Filament\Tables\Table;
+use Filament\Facades\Filament;
+use Filament\Resources\Resource;
+use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Resources\UserResource\Pages;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+use App\Filament\Resources\UserResource\RelationManagers;
+use STS\FilamentImpersonate\Tables\Actions\Impersonate;
+
+
+class UserResource extends Resource
+{
+    protected static ?string $model = User::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-lock-closed';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('filament-shield::filament-shield.nav.group');
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Section::make(__('User'))
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('email')
+                            ->email()
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('password')
+                            ->password()
+                            ->dehydrated(fn ($state) => filled($state))
+                            ->required(fn (string $context): bool => $context === 'create')
+                            ->maxLength(255),
+                        Forms\Components\Select::make('roles')
+                            ->relationship('roles', 'name', function($query) {
+                                if(auth()->user()->hasRole('super_admin')) {
+                                    return $query;
+                                }
+                                return $query->whereNot('id', 1);
+                            })
+                            ->multiple()
+                            ->preload()
+                            ->searchable(),
+                    ])->columns(2),
+                Forms\Components\Section::make(__('Tenant'))
+                    ->description('Selecting Multi Tenancy will allow you to assign the user to a tenant.')
+                    ->schema([
+                        Forms\Components\Select::make('teams')
+                            ->label(__('Tenant'))
+                            ->relationship('teams', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable(),
+                    ])
+
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->query(static::getEloquentQuery())
+            ->columns([
+                Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('email'),
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->badge()
+                    ->label(__('Role'))
+                    ->colors(['primary'])
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime(),
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->dateTime(),
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Impersonate::make(),
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ]);
+    }
+
+    public static function isScopedToTenant(): bool
+    {
+        if(auth()->user()->hasRole('super_admin')) {
+            return false;
+        }
+        return true;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if(auth()->user()->hasRole('super_admin')) {
+            return $query;
+        }
+
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            return $query->whereHas('teams', function ($query) use ($teamIds) {
+                $query->whereIn('teams.id', $teamIds);
+            });
+        }
+
+        return $query->where('id', auth()->user()->id);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListUsers::route('/'),
+            'create' => Pages\CreateUser::route('/create'),
+            'edit' => Pages\EditUser::route('/{record}/edit'),
+        ];
+    }
+}
+
+Filament/Resources/TeamResource.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\TeamResource\Pages;
+use App\Filament\Resources\TeamResource\RelationManagers;
+use App\Models\Team;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+
+class TeamResource extends Resource
+{
+    protected static ?string $model = Team::class;
+
+    protected static ?string $navigationLabel = 'Tenants';
+
+    protected static ?string $navigationIcon = 'heroicon-o-rectangle-group';
+
+    protected static bool $isScopedToTenant = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('filament-shield::filament-shield.nav.group');
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\TextInput::make('name')
+                    ->required()
+                    ->maxLength(255),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->query(static::getEloquentQuery())
+            ->columns([
+                Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('slug')
+                    ->searchable()
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if(auth()->user()->hasRole('super_admin')) {
+            return $query;
+        }
+
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            return $query->whereIn('id', $teamIds);
+        }
+
+        return $query->whereHas('users', function ($query) {
+            $query->where('users.id', auth()->user()->id);
+         });
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListTeams::route('/'),
+            'create' => Pages\CreateTeam::route('/create'),
+            'edit' => Pages\EditTeam::route('/{record}/edit'),
+        ];
+    }
+}
+
+Filament/Resources/Shield/RoleResource.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\Shield;
+
+use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
+use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use App\Filament\Resources\Shield\RoleResource\Pages;
+use BezhanSalleh\FilamentShield\Support\Utils;
+use Filament\Forms;
+use Filament\Forms\Components\Component;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
+
+class RoleResource extends Resource implements HasShieldPermissions
+{
+    protected static ?string $recordTitleAttribute = 'name';
+
+    protected static $permissionsCollection;
+
+    public static function getPermissionPrefixes(): array
+    {
+        return [
+            'view',
+            'view_any',
+            'create',
+            'update',
+            'delete',
+            'delete_any',
+        ];
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Grid::make()
+                    ->schema([
+                        Forms\Components\Section::make()
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->label(__('filament-shield::filament-shield.field.name'))
+                                    ->unique(ignoreRecord: true)
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('guard_name')
+                                    ->label(__('filament-shield::filament-shield.field.guard_name'))
+                                    ->default(Utils::getFilamentAuthGuard())
+                                    ->nullable()
+                                    ->maxLength(255),
+                                \BezhanSalleh\FilamentShield\Forms\ShieldSelectAllToggle::make('select_all')
+                                    ->onIcon('heroicon-s-shield-check')
+                                    ->offIcon('heroicon-s-shield-exclamation')
+                                    ->label(__('filament-shield::filament-shield.field.select_all.name'))
+                                    ->helperText(fn (): HtmlString => new HtmlString(__('filament-shield::filament-shield.field.select_all.message')))
+                                    ->dehydrated(fn ($state): bool => $state),
+
+                            ])
+                            ->columns([
+                                'sm' => 2,
+                                'lg' => 3,
+                            ]),
+                    ]),
+                Forms\Components\Tabs::make('Permissions')
+                    ->contained()
+                    ->tabs([
+                        Forms\Components\Tabs\Tab::make(__('filament-shield::filament-shield.resources'))
+                            ->visible(fn (): bool => (bool) Utils::isResourceEntityEnabled())
+                            ->badge(static::getResourceTabBadgeCount())
+                            ->schema([
+                                Forms\Components\Grid::make()
+                                    ->schema(static::getResourceEntitiesSchema())
+                                    ->columns(FilamentShieldPlugin::get()->getGridColumns()),
+                            ]),
+                        static::getTabFormComponentForPage(),
+                        static::getTabFormComponentForWidget(),
+                        static::getTabFormComponentForCustomPermissions(),
+                    ])
+                    ->columnSpan('full'),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('name')
+                    ->badge()
+                    ->label(__('filament-shield::filament-shield.column.name'))
+                    ->formatStateUsing(fn ($state): string => Str::headline($state))
+                    ->colors(['primary'])
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('guard_name')
+                    ->badge()
+                    ->label(__('filament-shield::filament-shield.column.guard_name')),
+                Tables\Columns\TextColumn::make('permissions_count')
+                    ->badge()
+                    ->label(__('filament-shield::filament-shield.column.permissions'))
+                    ->counts('permissions')
+                    ->colors(['success']),
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->label(__('filament-shield::filament-shield.column.updated_at'))
+                    ->dateTime(),
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make(),
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListRoles::route('/'),
+            'create' => Pages\CreateRole::route('/create'),
+            'view' => Pages\ViewRole::route('/{record}'),
+            'edit' => Pages\EditRole::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getModel(): string
+    {
+        return Utils::getRoleModel();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('filament-shield::filament-shield.resource.label.role');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('filament-shield::filament-shield.resource.label.roles');
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return Utils::isResourceNavigationRegistered();
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return Utils::isResourceNavigationGroupEnabled()
+            ? __('filament-shield::filament-shield.nav.group')
+            : '';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('filament-shield::filament-shield.nav.role.label');
+    }
+
+    public static function getNavigationIcon(): string
+    {
+        return __('filament-shield::filament-shield.nav.role.icon');
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return Utils::getResourceNavigationSort();
+    }
+
+    public static function getSlug(): string
+    {
+        return Utils::getResourceSlug();
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        return Utils::isResourceNavigationBadgeEnabled()
+            ? static::getModel()::count()
+            : null;
+    }
+
+    public static function isScopedToTenant(): bool
+    {
+        return Utils::isScopedToTenant();
+    }
+
+    public static function canGloballySearch(): bool
+    {
+        return Utils::isResourceGloballySearchable() && count(static::getGloballySearchableAttributes()) && static::canViewAny();
+    }
+
+    public static function getResourceEntitiesSchema(): ?array
+    {
+        static::$permissionsCollection = static::$permissionsCollection ?: Utils::getPermissionModel()::all();
+
+        return collect(FilamentShield::getResources())
+            ->sortKeys()
+            ->map(function ($entity) {
+                return Forms\Components\Section::make(FilamentShield::getLocalizedResourceLabel($entity['fqcn']))
+                    ->description(fn () => new HtmlString('<span style="word-break: break-word;">' . Utils::showModelPath($entity['fqcn']) . '</span>'))
+                    ->compact()
+                    ->schema([
+                        static::getCheckBoxListComponentForResource($entity),
+                    ])
+                    ->columnSpan(FilamentShieldPlugin::get()->getSectionColumnSpan())
+                    ->collapsible();
+            })
+            ->toArray();
+    }
+
+    public static function getResourceTabBadgeCount(): ?int
+    {
+        return collect(FilamentShield::getResources())
+            ->map(fn ($resource) => count(static::getResourcePermissionOptions($resource)))
+            ->sum();
+    }
+
+    public static function getResourcePermissionOptions(array $entity): array
+    {
+        return collect(Utils::getResourcePermissionPrefixes($entity['fqcn']))
+            ->flatMap(fn ($permission) => [
+                $permission . '_' . $entity['resource'] => FilamentShield::getLocalizedResourcePermissionLabel($permission),
+            ])
+            ->toArray();
+    }
+
+    public static function setPermissionStateForRecordPermissions(Component $component, string $operation, array $permissions, ?Model $record): void
+    {
+
+        if (in_array($operation, ['edit', 'view'])) {
+
+            if (blank($record)) {
+                return;
+            }
+            if ($component->isVisible() && count($permissions) > 0) {
+                $component->state(
+                    collect($permissions)
+                        /** @phpstan-ignore-next-line */
+                        ->filter(fn ($value, $key) => $record->checkPermissionTo($key))
+                        ->keys()
+                        ->toArray()
+                );
+            }
+        }
+    }
+
+    public static function getPageOptions(): array
+    {
+        return collect(FilamentShield::getPages())
+            ->flatMap(fn ($page) => [
+                $page['permission'] => FilamentShield::getLocalizedPageLabel($page['class']),
+            ])
+            ->toArray();
+    }
+
+    public static function getWidgetOptions(): array
+    {
+        return collect(FilamentShield::getWidgets())
+            ->flatMap(fn ($widget) => [
+                $widget['permission'] => FilamentShield::getLocalizedWidgetLabel($widget['class']),
+            ])
+            ->toArray();
+    }
+
+    public static function getCustomPermissionOptions(): array
+    {
+        return collect(static::getCustomEntities())
+            ->flatMap(fn ($customPermission) => [
+                $customPermission => str($customPermission)->headline()->toString(),
+            ])
+            ->toArray();
+    }
+
+    protected static function getCustomEntities(): ?Collection
+    {
+        $resourcePermissions = collect();
+        collect(FilamentShield::getResources())->each(function ($entity) use ($resourcePermissions) {
+            collect(Utils::getResourcePermissionPrefixes($entity['fqcn']))->map(function ($permission) use ($resourcePermissions, $entity) {
+                $resourcePermissions->push((string) Str::of($permission . '_' . $entity['resource']));
+            });
+        });
+
+        $entitiesPermissions = $resourcePermissions
+            ->merge(collect(FilamentShield::getPages())->map(fn ($page) => $page['permission'])->values())
+            ->merge(collect(FilamentShield::getWidgets())->map(fn ($widget) => $widget['permission'])->values())
+            ->values();
+
+        return static::$permissionsCollection->whereNotIn('name', $entitiesPermissions)->pluck('name');
+    }
+
+    public static function getCheckBoxListComponentForResource(array $entity): Component
+    {
+        $permissionsArray = static::getResourcePermissionOptions($entity);
+
+        return static::getCheckboxListFormComponent($entity['resource'], $permissionsArray, false);
+    }
+
+    public static function getTabFormComponentForPage(): Component
+    {
+        $options = static::getPageOptions();
+        $count = count($options);
+
+        return Forms\Components\Tabs\Tab::make(__('filament-shield::filament-shield.pages'))
+            ->visible(fn (): bool => (bool) Utils::isPageEntityEnabled() && $count > 0)
+            ->badge($count)
+            ->schema([
+                static::getCheckboxListFormComponent('pages_tab', $options)
+            ]);
+    }
+
+    public static function getTabFormComponentForWidget(): Component
+    {
+        $options = static::getWidgetOptions();
+        $count = count($options);
+
+        return Forms\Components\Tabs\Tab::make(__('filament-shield::filament-shield.widgets'))
+            ->visible(fn (): bool => (bool) Utils::isWidgetEntityEnabled() && $count > 0)
+            ->badge($count)
+            ->schema([
+                static::getCheckboxListFormComponent('widgets_tab', $options)
+            ]);
+    }
+
+    public static function getTabFormComponentForCustomPermissions(): Component
+    {
+        $options = static::getCustomPermissionOptions();
+        $count = count($options);
+
+        return Forms\Components\Tabs\Tab::make(__('filament-shield::filament-shield.custom'))
+            ->visible(fn (): bool => (bool) Utils::isCustomPermissionEntityEnabled() && $count > 0)
+            ->badge($count)
+            ->schema([
+                static::getCheckboxListFormComponent('custom_permissions', $options),
+            ]);
+    }
+
+    public static function getCheckboxListFormComponent(string $name, array $options, bool $searchable = true): Component
+    {
+        return Forms\Components\CheckboxList::make($name)
+            ->label('')
+            ->options(fn (): array => $options)
+            ->searchable($searchable)
+            ->afterStateHydrated(
+                fn (Component $component, string $operation, ?Model $record) => static::setPermissionStateForRecordPermissions(
+                    component: $component,
+                    operation: $operation,
+                    permissions: $options,
+                    record: $record
+                )
+            )
+            ->dehydrated(fn ($state) => ! blank($state))
+            ->bulkToggleable()
+            ->gridDirection('row')
+            ->columns(FilamentShieldPlugin::get()->getCheckboxListColumns())
+            ->columnSpan(FilamentShieldPlugin::get()->getCheckboxListColumnSpan());
+    }
+}
+
+
+Filament/Resources/Shield/RoleResource/Pages/EditRole.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\Shield\RoleResource\Pages;
+
+use App\Filament\Resources\Shield\RoleResource;
+use BezhanSalleh\FilamentShield\Support\Utils;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+
+class EditRole extends EditRecord
+{
+    protected static string $resource = RoleResource::class;
+
+    public Collection $permissions;
+
+    protected function getActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $this->permissions = collect($data)
+            ->filter(function ($permission, $key) {
+                return ! in_array($key, ['name', 'guard_name', 'select_all']);
+            })
+            ->values()
+            ->flatten()
+            ->unique();
+
+        return Arr::only($data, ['name', 'guard_name']);
+    }
+
+    protected function afterSave(): void
+    {
+        $permissionModels = collect();
+        $this->permissions->each(function ($permission) use ($permissionModels) {
+            $permissionModels->push(Utils::getPermissionModel()::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => $this->data['guard_name'],
+            ]));
+        });
+
+        $this->record->syncPermissions($permissionModels);
+    }
+}
+
+
+Filament/Resources/Shield/RoleResource/Pages/ViewRole.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\Shield\RoleResource\Pages;
+
+use App\Filament\Resources\Shield\RoleResource;
+use Filament\Actions;
+use Filament\Resources\Pages\ViewRecord;
+
+class ViewRole extends ViewRecord
+{
+    protected static string $resource = RoleResource::class;
+
+    protected function getActions(): array
+    {
+        return [
+            Actions\EditAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/Shield/RoleResource/Pages/ListRoles.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\Shield\RoleResource\Pages;
+
+use App\Filament\Resources\Shield\RoleResource;
+use Filament\Actions;
+use Filament\Resources\Pages\ListRecords;
+
+class ListRoles extends ListRecords
+{
+    protected static string $resource = RoleResource::class;
+
+    protected function getActions(): array
+    {
+        return [
+            Actions\CreateAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/Shield/RoleResource/Pages/CreateRole.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\Shield\RoleResource\Pages;
+
+use App\Filament\Resources\Shield\RoleResource;
+use BezhanSalleh\FilamentShield\Support\Utils;
+use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+
+class CreateRole extends CreateRecord
+{
+    protected static string $resource = RoleResource::class;
+
+    public Collection $permissions;
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $this->permissions = collect($data)
+            ->filter(function ($permission, $key) {
+                return ! in_array($key, ['name', 'guard_name', 'select_all']);
+            })
+            ->values()
+            ->flatten()
+            ->unique();
+
+        return Arr::only($data, ['name', 'guard_name']);
+    }
+
+    protected function afterCreate(): void
+    {
+        $permissionModels = collect();
+        $this->permissions->each(function ($permission) use ($permissionModels) {
+            $permissionModels->push(Utils::getPermissionModel()::firstOrCreate([
+                /** @phpstan-ignore-next-line */
+                'name' => $permission,
+                'guard_name' => $this->data['guard_name'],
+            ]));
+        });
+
+        $this->record->syncPermissions($permissionModels);
+    }
+}
+
+
+Filament/Resources/UserResource/Pages/ListUsers.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Actions;
+use Filament\Resources\Pages\ListRecords;
+
+
+class ListUsers extends ListRecords
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\CreateAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/UserResource/Pages/EditUser.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+use STS\FilamentImpersonate\Pages\Actions\Impersonate;
+
+
+class EditUser extends EditRecord
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+            Impersonate::make()->record($this->getRecord()) 
+        ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+}
+
+
+Filament/Resources/UserResource/Pages/CreateUser.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\UserResource\Pages;
+
+use App\Filament\Resources\UserResource;
+use Filament\Actions;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateUser extends CreateRecord
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+}
+
+
+Filament/Resources/TeamResource/Pages/EditTeam.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\TeamResource\Pages;
+
+use App\Filament\Resources\TeamResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+
+class EditTeam extends EditRecord
+{
+    protected static string $resource = TeamResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+}
+
+
+Filament/Resources/TeamResource/Pages/ListTeams.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\TeamResource\Pages;
+
+use App\Filament\Resources\TeamResource;
+use Filament\Actions;
+use Filament\Resources\Pages\ListRecords;
+
+class ListTeams extends ListRecords
+{
+    protected static string $resource = TeamResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\CreateAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/TeamResource/Pages/CreateTeam.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\TeamResource\Pages;
+
+use App\Models\Team;
+use App\Models\User;
+use Filament\Actions;
+use App\Traits\GenerateSlug;
+use App\Filament\Resources\TeamResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateTeam extends CreateRecord
+{
+    use GenerateSlug;
+    protected static string $resource = TeamResource::class;
+
+    protected function mutateFormDataBeforeCreate(
+        array $data
+    ): array {
+
+        $data['slug'] = $this->generateSlug(
+            $data['name'],'teams'
+        );
+
+        return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
+    protected function afterCreate(): void
+    {
+        $this
+            ->record
+            ->users()
+            ->attach(User::find(1));
+    }
+}
+
+
+Filament/Pages/Auth/Login.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use Filament\Forms\Form;
+use Filament\Forms\Components\Component;
+use Filament\Forms\Components\TextInput;
+use Filament\Pages\Auth\Login as BaseAuth;
+use Illuminate\Validation\ValidationException;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+use Illuminate\Http\RedirectResponse;
+
+class Login extends BaseAuth
+{
+    /**
+     * Get the form for the resource.
+     */
+    public function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                $this->getUsernameFormComponent(),
+                $this->getPasswordFormComponent(),
+                $this->getRememberFormComponent(),
+            ])
+            ->statePath('data');
+    }
+
+    /**
+     * Get the username form component.
+     */
+    protected function getUsernameFormComponent(): Component
+    {
+        return TextInput::make('username')
+            ->label('Username or Email')
+            ->required()
+            ->autocomplete()
+            ->autofocus()
+            ->extraInputAttributes(['tabindex' => 1]);
+    }
+
+    /**
+     * Get the credentials from the form data.
+     */
+    protected function getCredentialsFromFormData(array $data): array
+    {
+        $type = filter_var($data['username'], FILTER_VALIDATE_EMAIL) ? 'email' : 'name';
+
+        return [
+            $type => $data['username'],
+            'password' => $data['password'],
+        ];
+    }
+
+    /**
+     * Authenticate the user.
+     */
+    public function authenticate(): ?LoginResponse
+    {
+        try {
+            return parent::authenticate();
+        } catch (ValidationException) {
+            throw ValidationException::withMessages([
+                'data.username' => __('filament-panels::pages/auth/login.messages.failed'),
+            ]);
+        }
+    }
+
+    /**
+     * Redirect the user after successful authentication.
+     */
+    protected function authenticated(): RedirectResponse
+    {
+        return redirect()->intended(route('filament.admin.pages.dashboard'));
+    }
+}
+
+Http/Kernel.php
+
+---content---
+
+<?php
+
+namespace App\Http;
+
+use Illuminate\Foundation\Http\Kernel as HttpKernel;
+
+class Kernel extends HttpKernel
+{
+    /**
+     * The application's global HTTP middleware stack.
+     *
+     * These middleware are run during every request to your application.
+     *
+     * @var array<int, class-string|string>
+     */
+    protected $middleware = [
+        // \App\Http\Middleware\TrustHosts::class,
+        \Bilfeldt\LaravelRouteStatistics\Http\Middleware\RouteStatisticsMiddleware::class,
+        \App\Http\Middleware\TrustProxies::class,
+        \Illuminate\Http\Middleware\HandleCors::class,
+        \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
+        \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
+        \App\Http\Middleware\TrimStrings::class,
+        \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+    ];
+
+    /**
+     * The application's route middleware groups.
+     *
+     * @var array<string, array<int, class-string|string>>
+     */
+    protected $middlewareGroups = [
+        'web' => [
+            \App\Http\Middleware\EncryptCookies::class,
+            \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+            \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \App\Http\Middleware\VerifyCsrfToken::class,
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ],
+
+        'api' => [
+            // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ],
+    ];
+
+    /**
+     * The application's middleware aliases.
+     *
+     * Aliases may be used instead of class names to conveniently assign middleware to routes and groups.
+     *
+     * @var array<string, class-string|string>
+     */
+    protected $middlewareAliases = [
+        'auth' => \App\Http\Middleware\Authenticate::class,
+        'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
+        'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
+        'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
+        'can' => \Illuminate\Auth\Middleware\Authorize::class,
+        'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
+        'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
+        'precognitive' => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+        'signed' => \App\Http\Middleware\ValidateSignature::class,
+        'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+    ];
+}
+
+
+Http/Middleware/VerifyCsrfToken.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
+
+class VerifyCsrfToken extends Middleware
+{
+    /**
+     * The URIs that should be excluded from CSRF verification.
+     *
+     * @var array<int, string>
+     */
+    protected $except = [
+        //
+    ];
+}
+
+
+Http/Middleware/RedirectIfAuthenticated.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Providers\RouteServiceProvider;
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
+
+class RedirectIfAuthenticated
+{
+    /**
+     * Handle an incoming request.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
+    public function handle(Request $request, Closure $next, string ...$guards): Response
+    {
+        $guards = empty($guards) ? [null] : $guards;
+
+        foreach ($guards as $guard) {
+            if (Auth::guard($guard)->check()) {
+                return redirect(RouteServiceProvider::HOME);
+            }
+        }
+
+        return $next($request);
+    }
+}
+
+
+Http/Middleware/TrimStrings.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Foundation\Http\Middleware\TrimStrings as Middleware;
+
+class TrimStrings extends Middleware
+{
+    /**
+     * The names of the attributes that should not be trimmed.
+     *
+     * @var array<int, string>
+     */
+    protected $except = [
+        'current_password',
+        'password',
+        'password_confirmation',
+    ];
+}
+
+
+Http/Middleware/Authenticate.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Auth\Middleware\Authenticate as Middleware;
+use Illuminate\Http\Request;
+
+class Authenticate extends Middleware
+{
+    /**
+     * Get the path the user should be redirected to when they are not authenticated.
+     */
+    protected function redirectTo(Request $request): ?string
+    {
+        return $request->expectsJson() ? null : route('login');
+    }
+}
+
+
+Http/Middleware/TrustProxies.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Http\Middleware\TrustProxies as Middleware;
+use Illuminate\Http\Request;
+
+class TrustProxies extends Middleware
+{
+    /**
+     * The trusted proxies for this application.
+     *
+     * @var array<int, string>|string|null
+     */
+    protected $proxies;
+
+    /**
+     * The headers that should be used to detect proxies.
+     *
+     * @var int
+     */
+    protected $headers =
+        Request::HEADER_X_FORWARDED_FOR |
+        Request::HEADER_X_FORWARDED_HOST |
+        Request::HEADER_X_FORWARDED_PORT |
+        Request::HEADER_X_FORWARDED_PROTO |
+        Request::HEADER_X_FORWARDED_AWS_ELB;
+}
+
+
+Http/Middleware/ValidateSignature.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Routing\Middleware\ValidateSignature as Middleware;
+
+class ValidateSignature extends Middleware
+{
+    /**
+     * The names of the query string parameters that should be ignored.
+     *
+     * @var array<int, string>
+     */
+    protected $except = [
+        // 'fbclid',
+        // 'utm_campaign',
+        // 'utm_content',
+        // 'utm_medium',
+        // 'utm_source',
+        // 'utm_term',
+    ];
+}
+
+
+Http/Middleware/PreventRequestsDuringMaintenance.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance as Middleware;
+
+class PreventRequestsDuringMaintenance extends Middleware
+{
+    /**
+     * The URIs that should be reachable while maintenance mode is enabled.
+     *
+     * @var array<int, string>
+     */
+    protected $except = [
+        //
+    ];
+}
+
+
+Http/Middleware/EncryptCookies.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Cookie\Middleware\EncryptCookies as Middleware;
+
+class EncryptCookies extends Middleware
+{
+    /**
+     * The names of the cookies that should not be encrypted.
+     *
+     * @var array<int, string>
+     */
+    protected $except = [
+        //
+    ];
+}
+
+
+Http/Middleware/TrustHosts.php
+
+---content---
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Illuminate\Http\Middleware\TrustHosts as Middleware;
+
+class TrustHosts extends Middleware
+{
+    /**
+     * Get the host patterns that should be trusted.
+     *
+     * @return array<int, string|null>
+     */
+    public function hosts(): array
+    {
+        return [
+            $this->allSubdomainsOfApplicationUrl(),
+        ];
+    }
+}
+
+
+Http/Controllers/Controller.php
+
+---content---
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Routing\Controller as BaseController;
+
+class Controller extends BaseController
+{
+    use AuthorizesRequests, ValidatesRequests;
+}
+
+
+Console/Kernel.php
+
+---content---
+
+<?php
+
+namespace App\Console;
+
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+
+class Kernel extends ConsoleKernel
+{
+    /**
+     * Define the application's command schedule.
+     */
+    protected function schedule(Schedule $schedule): void
+    {
+        // $schedule->command('inspire')->hourly();
+    }
+
+    /**
+     * Register the commands for the application.
+     */
+    protected function commands(): void
+    {
+        $this->load(__DIR__.'/Commands');
+
+        require base_path('routes/console.php');
+    }
+}
+
+

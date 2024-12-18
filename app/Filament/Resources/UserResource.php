@@ -7,14 +7,10 @@ use App\Models\User;
 use Filament\Tables;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
-use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use App\Filament\Resources\UserResource\RelationManagers;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
-
 
 class UserResource extends Resource
 {
@@ -45,35 +41,43 @@ class UserResource extends Resource
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create')
                             ->maxLength(255),
+                        // Alleen super_admin kan roles toewijzen
                         Forms\Components\Select::make('roles')
                             ->relationship('roles', 'name', function($query) {
-                                if(auth()->user()->id === 1) {
+                                if(auth()->user()->hasRole('super_admin')) {
                                     return $query;
                                 }
-                                return $query->whereNot('id', 1);
+                                // Team admin kan alleen team_member rol toewijzen
+                                return $query->where('name', 'team_member');
                             })
                             ->multiple()
                             ->preload()
-                            ->searchable(),
+                            ->searchable()
+                            ->visible(fn () => auth()->user()->hasRole(['super_admin', 'team_admin'])),
                     ])->columns(2),
                 Forms\Components\Section::make(__('Tenant'))
                     ->description('Selecting Multi Tenancy will allow you to assign the user to a tenant.')
                     ->schema([
                         Forms\Components\Select::make('teams')
                             ->label(__('Tenant'))
-                            ->relationship('teams', 'name')
+                            ->relationship('teams', 'name', function($query) {
+                                if(auth()->user()->hasRole('super_admin')) {
+                                    return $query;
+                                }
+                                // Team admin ziet alleen eigen teams
+                                return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
+                            })
                             ->multiple()
                             ->preload()
-                            ->searchable(),
+                            ->searchable()
+                            ->required(),
                     ])
-
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
@@ -92,28 +96,38 @@ class UserResource extends Resource
                 //
             ])
             ->actions([
-                Impersonate::make(),
+                Impersonate::make()->visible(fn ($record) => auth()->user()->hasRole('super_admin')),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ]);
-    }
-
-    public static function isScopedToTenant(): bool
-    {
-        if(Filament::getTenant()->id === 1) {
-            return false;
-        }
-        return true;
     }
 
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
 
-        if(auth()->user()->id === 1) {
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            
+            return $query
+                // Alleen users in dezelfde teams
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                })
+                // Exclude super_admin en andere team_admins
+                ->whereDoesntHave('roles', function ($query) {
+                    $query->whereIn('name', ['super_admin', 'team_admin']);
+                })
+                // Exclude jezelf
+                ->where('users.id', '!=', auth()->id());
+        }
+
+        if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
-        return $query->whereNot('id',1);
+
+        // Voor alle andere users, alleen eigen profiel
+        return $query->where('users.id', auth()->id());
     }
 
     public static function getRelations(): array
@@ -130,5 +144,18 @@ class UserResource extends Resource
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
+    }
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        // Zorg ervoor dat team_member rol automatisch wordt toegewezen bij het aanmaken door team_admin
+        if (auth()->user()->hasRole('team_admin') && !isset($data['roles'])) {
+            $teamMemberRole = \Spatie\Permission\Models\Role::where('name', 'team_member')->first();
+            if ($teamMemberRole) {
+                $data['roles'] = [$teamMemberRole->id];
+            }
+        }
+
+        return $data;
     }
 }

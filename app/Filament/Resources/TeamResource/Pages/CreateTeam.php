@@ -12,15 +12,13 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateTeam extends CreateRecord
 {
     use GenerateSlug;
+    
     protected static string $resource = TeamResource::class;
 
-    protected function mutateFormDataBeforeCreate(
-        array $data
-    ): array {
-
-        $data['slug'] = $this->generateSlug(
-            $data['name'],'teams'
-        );
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['slug'] = $this->generateSlug($data['name'], 'teams');
+        $data['created_by'] = auth()->id();
 
         return $data;
     }
@@ -32,9 +30,6 @@ class CreateTeam extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $this
-            ->record
-            ->users()
-            ->attach(User::find(1));
+        $this->record->users()->attach(auth()->user());
     }
 }

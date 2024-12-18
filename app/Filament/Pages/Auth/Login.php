@@ -1,12 +1,14 @@
 <?php
 
 namespace App\Filament\Pages\Auth;
+
 use Filament\Forms\Form;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Auth\Login as BaseAuth;
 use Illuminate\Validation\ValidationException;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+use Illuminate\Http\RedirectResponse;
 
 class Login extends BaseAuth
 {
@@ -62,5 +64,13 @@ class Login extends BaseAuth
                 'data.username' => __('filament-panels::pages/auth/login.messages.failed'),
             ]);
         }
+    }
+
+    /**
+     * Redirect the user after successful authentication.
+     */
+    protected function authenticated(): RedirectResponse
+    {
+        return redirect()->intended(route('filament.admin.pages.dashboard'));
     }
 }

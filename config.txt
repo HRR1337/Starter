@@ -1,0 +1,2142 @@
+sanctum.php
+
+---content---
+
+<?php
+
+use Laravel\Sanctum\Sanctum;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stateful Domains
+    |--------------------------------------------------------------------------
+    |
+    | Requests from the following domains / hosts will receive stateful API
+    | authentication cookies. Typically, these should include your local
+    | and production domains which access your API via a frontend SPA.
+    |
+    */
+
+    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
+        '%s%s',
+        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+        Sanctum::currentApplicationUrlWithPort()
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sanctum Guards
+    |--------------------------------------------------------------------------
+    |
+    | This array contains the authentication guards that will be checked when
+    | Sanctum is trying to authenticate a request. If none of these guards
+    | are able to authenticate the request, Sanctum will use the bearer
+    | token that's present on an incoming request for authentication.
+    |
+    */
+
+    'guard' => ['web'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Expiration Minutes
+    |--------------------------------------------------------------------------
+    |
+    | This value controls the number of minutes until an issued token will be
+    | considered expired. This will override any values set in the token's
+    | "expires_at" attribute, but first-party sessions are not affected.
+    |
+    */
+
+    'expiration' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token Prefix
+    |--------------------------------------------------------------------------
+    |
+    | Sanctum can prefix new tokens in order to take advantage of numerous
+    | security scanning initiatives maintained by open source platforms
+    | that notify developers if they commit tokens into repositories.
+    |
+    | See: https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning
+    |
+    */
+
+    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sanctum Middleware
+    |--------------------------------------------------------------------------
+    |
+    | When authenticating your first-party SPA with Sanctum you may need to
+    | customize some of the middleware Sanctum uses while processing the
+    | request. You may change the middleware listed below as required.
+    |
+    */
+
+    'middleware' => [
+        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
+        'encrypt_cookies' => App\Http\Middleware\EncryptCookies::class,
+        'verify_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
+    ],
+
+];
+
+
+route-statistics.php
+
+---content---
+
+<?php
+
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Enabled
+    |--------------------------------------------------------------------------
+    |
+    | This is a 'master' switch to enable/disable logging. Setting this to
+    | false will disable all logging.
+    |
+    */
+    'enabled' => env('ROUTE_STATISTICS_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Aggregation
+    |--------------------------------------------------------------------------
+    |
+    | This setting controls how we should aggregate requests.
+    | Possible values are: MINUTE, HOUR, DAY, MONTH, YEAR
+    |
+    */
+    'aggregate' => env('ROUTE_STATISTICS_AGGREGATE', 'DAY'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model
+    |--------------------------------------------------------------------------
+    |
+    | This is the model used to store request statistics.
+    | It is possible to implement a custom model which extends the default model
+    | or alternatively implement a completely new model which implements
+    | Bilfeldt\RequestLogger\Contracts\RequestLoggerInterface
+    |
+    */
+    'model' => env('ROUTE_STATISTICS_MODEL', \Bilfeldt\LaravelRouteStatistics\Models\RouteStatistic::class),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Store Strategy
+    |--------------------------------------------------------------------------
+    |
+    | If you set this to true, the Logs stored in the database using queues
+    | It is good when you have large database
+    |
+    */
+    'queued' => env('ROUTE_STATISTICS_QUEUED', false),
+];
+
+
+hashing.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Hash Driver
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default hash driver that will be used to hash
+    | passwords for your application. By default, the bcrypt algorithm is
+    | used; however, you remain free to modify this option if you wish.
+    |
+    | Supported: "bcrypt", "argon", "argon2id"
+    |
+    */
+
+    'driver' => 'bcrypt',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bcrypt Options
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the configuration options that should be used when
+    | passwords are hashed using the Bcrypt algorithm. This will allow you
+    | to control the amount of time it takes to hash the given password.
+    |
+    */
+
+    'bcrypt' => [
+        'rounds' => env('BCRYPT_ROUNDS', 12),
+        'verify' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Argon Options
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the configuration options that should be used when
+    | passwords are hashed using the Argon algorithm. These will allow you
+    | to control the amount of time it takes to hash the given password.
+    |
+    */
+
+    'argon' => [
+        'memory' => 65536,
+        'threads' => 1,
+        'time' => 4,
+        'verify' => true,
+    ],
+
+];
+
+
+filament-shield.php
+
+---content---
+
+<?php
+
+return [
+    'shield_resource' => [
+        'should_register_navigation' => true,
+        'slug' => 'shield/roles',
+        'navigation_sort' => -1,
+        'navigation_badge' => true,
+        'navigation_group' => true,
+        'is_globally_searchable' => false,
+        'show_model_path' => true,
+        'is_scoped_to_tenant' => false,
+    ],
+
+    'auth_provider_model' => [
+        'fqcn' => 'App\\Models\\User',
+    ],
+
+    'super_admin' => [
+        'enabled' => true,
+        'name' => 'super_admin',
+        'define_via_gate' => false,
+        'intercept_gate' => 'before', // after
+    ],
+
+    'panel_user' => [
+        'enabled' => true,
+        'name' => 'panel_user',
+    ],
+
+    'permission_prefixes' => [
+        'resource' => [
+            'view',
+            'view_any',
+            'create',
+            'update',
+            'restore',
+            'restore_any',
+            'replicate',
+            'reorder',
+            'delete',
+            'delete_any',
+            'force_delete',
+            'force_delete_any',
+        ],
+
+        'page' => 'page',
+        'widget' => 'widget',
+    ],
+
+    'entities' => [
+        'pages' => true,
+        'widgets' => true,
+        'resources' => true,
+        'custom_permissions' => false,
+    ],
+
+    'generator' => [
+        'option' => 'policies_and_permissions',
+        'policy_directory' => 'Policies',
+    ],
+
+    'exclude' => [
+        'enabled' => true,
+
+        'pages' => [
+            'Dashboard',
+        ],
+
+        'widgets' => [
+            'AccountWidget', 'FilamentInfoWidget',
+        ],
+
+        'resources' => [],
+    ],
+
+    'discovery' => [
+        'discover_all_resources' => true,
+        'discover_all_widgets' => true,
+        'discover_all_pages' => true,
+    ],
+
+    'register_role_policy' => [
+    ],
+
+];
+
+
+auth.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Defaults
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default authentication "guard" and password
+    | reset options for your application. You may change these defaults
+    | as required, but they're a perfect start for most applications.
+    |
+    */
+
+    'defaults' => [
+        'guard' => 'web',
+        'passwords' => 'users',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Guards
+    |--------------------------------------------------------------------------
+    |
+    | Next, you may define every authentication guard for your application.
+    | Of course, a great default configuration has been defined for you
+    | here which uses session storage and the Eloquent user provider.
+    |
+    | All authentication drivers have a user provider. This defines how the
+    | users are actually retrieved out of your database or other storage
+    | mechanisms used by this application to persist your user's data.
+    |
+    | Supported: "session"
+    |
+    */
+
+    'guards' => [
+        'web' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | User Providers
+    |--------------------------------------------------------------------------
+    |
+    | All authentication drivers have a user provider. This defines how the
+    | users are actually retrieved out of your database or other storage
+    | mechanisms used by this application to persist your user's data.
+    |
+    | If you have multiple user tables or models you may configure multiple
+    | sources which represent each model / table. These sources may then
+    | be assigned to any extra authentication guards you have defined.
+    |
+    | Supported: "database", "eloquent"
+    |
+    */
+
+    'providers' => [
+        'users' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\User::class,
+        ],
+
+        // 'users' => [
+        //     'driver' => 'database',
+        //     'table' => 'users',
+        // ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resetting Passwords
+    |--------------------------------------------------------------------------
+    |
+    | You may specify multiple password reset configurations if you have more
+    | than one user table or model in the application and you want to have
+    | separate password reset settings based on the specific user types.
+    |
+    | The expiry time is the number of minutes that each reset token will be
+    | considered valid. This security feature keeps tokens short-lived so
+    | they have less time to be guessed. You may change this as needed.
+    |
+    | The throttle setting is the number of seconds a user must wait before
+    | generating more password reset tokens. This prevents the user from
+    | quickly generating a very large amount of password reset tokens.
+    |
+    */
+
+    'passwords' => [
+        'users' => [
+            'provider' => 'users',
+            'table' => 'password_reset_tokens',
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Password Confirmation Timeout
+    |--------------------------------------------------------------------------
+    |
+    | Here you may define the amount of seconds before a password confirmation
+    | times out and the user is prompted to re-enter their password via the
+    | confirmation screen. By default, the timeout lasts for three hours.
+    |
+    */
+
+    'password_timeout' => 10800,
+
+];
+
+
+app.php
+
+---content---
+
+<?php
+
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\ServiceProvider;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Name
+    |--------------------------------------------------------------------------
+    |
+    | This value is the name of your application. This value is used when the
+    | framework needs to place the application's name in a notification or
+    | any other location as required by the application or its packages.
+    |
+    */
+
+    'name' => env('APP_NAME', 'Laravel'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Environment
+    |--------------------------------------------------------------------------
+    |
+    | This value determines the "environment" your application is currently
+    | running in. This may determine how you prefer to configure various
+    | services the application utilizes. Set this in your ".env" file.
+    |
+    */
+
+    'env' => env('APP_ENV', 'production'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Debug Mode
+    |--------------------------------------------------------------------------
+    |
+    | When your application is in debug mode, detailed error messages with
+    | stack traces will be shown on every error that occurs within your
+    | application. If disabled, a simple generic error page is shown.
+    |
+    */
+
+    'debug' => (bool) env('APP_DEBUG', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL is used by the console to properly generate URLs when using
+    | the Artisan command line tool. You should set this to the root of
+    | your application so that it is used when running Artisan tasks.
+    |
+    */
+
+    'url' => env('APP_URL', 'http://localhost'),
+
+    'asset_url' => env('ASSET_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the default timezone for your application, which
+    | will be used by the PHP date and date-time functions. We have gone
+    | ahead and set this to a sensible default for you out of the box.
+    |
+    */
+
+    'timezone' => 'UTC',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Locale Configuration
+    |--------------------------------------------------------------------------
+    |
+    | The application locale determines the default locale that will be used
+    | by the translation service provider. You are free to set this value
+    | to any of the locales which will be supported by the application.
+    |
+    */
+
+    'locale' => 'en',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Fallback Locale
+    |--------------------------------------------------------------------------
+    |
+    | The fallback locale determines the locale to use when the current one
+    | is not available. You may change the value to correspond to any of
+    | the language folders that are provided through your application.
+    |
+    */
+
+    'fallback_locale' => 'en',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Faker Locale
+    |--------------------------------------------------------------------------
+    |
+    | This locale will be used by the Faker PHP library when generating fake
+    | data for your database seeds. For example, this will be used to get
+    | localized telephone numbers, street address information and more.
+    |
+    */
+
+    'faker_locale' => 'en_US',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Encryption Key
+    |--------------------------------------------------------------------------
+    |
+    | This key is used by the Illuminate encrypter service and should be set
+    | to a random, 32 character string, otherwise these encrypted strings
+    | will not be safe. Please do this before deploying an application!
+    |
+    */
+
+    'key' => env('APP_KEY'),
+
+    'cipher' => 'AES-256-CBC',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maintenance Mode Driver
+    |--------------------------------------------------------------------------
+    |
+    | These configuration options determine the driver used to determine and
+    | manage Laravel's "maintenance mode" status. The "cache" driver will
+    | allow maintenance mode to be controlled across multiple machines.
+    |
+    | Supported drivers: "file", "cache"
+    |
+    */
+
+    'maintenance' => [
+        'driver' => 'file',
+        // 'store' => 'redis',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Autoloaded Service Providers
+    |--------------------------------------------------------------------------
+    |
+    | The service providers listed here will be automatically loaded on the
+    | request to your application. Feel free to add your own services to
+    | this array to grant expanded functionality to your applications.
+    |
+    */
+
+    'providers' => ServiceProvider::defaultProviders()->merge([
+        /*
+         * Package Service Providers...
+         */
+
+        /*
+         * Application Service Providers...
+         */
+        App\Providers\AppServiceProvider::class,
+        App\Providers\AuthServiceProvider::class,
+        // App\Providers\BroadcastServiceProvider::class,
+        App\Providers\EventServiceProvider::class,
+        App\Providers\Filament\AdminPanelProvider::class,
+        App\Providers\RouteServiceProvider::class,
+    ])->toArray(),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Class Aliases
+    |--------------------------------------------------------------------------
+    |
+    | This array of class aliases will be registered when this application
+    | is started. However, feel free to register as many as you wish as
+    | the aliases are "lazy" loaded so they don't hinder performance.
+    |
+    */
+
+    'aliases' => Facade::defaultAliases()->merge([
+        // 'Example' => App\Facades\Example::class,
+    ])->toArray(),
+
+];
+
+
+mail.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Mailer
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default mailer that is used to send any email
+    | messages sent by your application. Alternative mailers may be setup
+    | and used as needed; however, this mailer will be used by default.
+    |
+    */
+
+    'default' => env('MAIL_MAILER', 'smtp'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mailer Configurations
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure all of the mailers used by your application plus
+    | their respective settings. Several examples have been configured for
+    | you and you are free to add your own as your application requires.
+    |
+    | Laravel supports a variety of mail "transport" drivers to be used while
+    | sending an e-mail. You will specify which one you are using for your
+    | mailers below. You are free to add additional mailers as required.
+    |
+    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
+    |            "postmark", "log", "array", "failover", "roundrobin"
+    |
+    */
+
+    'mailers' => [
+        'smtp' => [
+            'transport' => 'smtp',
+            'url' => env('MAIL_URL'),
+            'host' => env('MAIL_HOST', 'smtp.mailgun.org'),
+            'port' => env('MAIL_PORT', 587),
+            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
+            'username' => env('MAIL_USERNAME'),
+            'password' => env('MAIL_PASSWORD'),
+            'timeout' => null,
+            'local_domain' => env('MAIL_EHLO_DOMAIN'),
+        ],
+
+        'ses' => [
+            'transport' => 'ses',
+        ],
+
+        'postmark' => [
+            'transport' => 'postmark',
+            // 'message_stream_id' => null,
+            // 'client' => [
+            //     'timeout' => 5,
+            // ],
+        ],
+
+        'mailgun' => [
+            'transport' => 'mailgun',
+            // 'client' => [
+            //     'timeout' => 5,
+            // ],
+        ],
+
+        'sendmail' => [
+            'transport' => 'sendmail',
+            'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
+        ],
+
+        'log' => [
+            'transport' => 'log',
+            'channel' => env('MAIL_LOG_CHANNEL'),
+        ],
+
+        'array' => [
+            'transport' => 'array',
+        ],
+
+        'failover' => [
+            'transport' => 'failover',
+            'mailers' => [
+                'smtp',
+                'log',
+            ],
+        ],
+
+        'roundrobin' => [
+            'transport' => 'roundrobin',
+            'mailers' => [
+                'ses',
+                'postmark',
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Global "From" Address
+    |--------------------------------------------------------------------------
+    |
+    | You may wish for all e-mails sent by your application to be sent from
+    | the same address. Here, you may specify a name and address that is
+    | used globally for all e-mails that are sent by your application.
+    |
+    */
+
+    'from' => [
+        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+        'name' => env('MAIL_FROM_NAME', 'Example'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown Mail Settings
+    |--------------------------------------------------------------------------
+    |
+    | If you are using Markdown based email rendering, you may configure your
+    | theme and component paths here, allowing you to customize the design
+    | of the emails. Or, you may simply stick with the Laravel defaults!
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'default',
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
+];
+
+
+themes.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Theme mode
+    |--------------------------------------------------------------------------
+    |
+    | This option determines how the theme will be set for the application.
+    | By default global mode is set to use one theme for all users. If you
+    | want to set a theme for each user separately, then set to 'user'.
+    |
+    */
+
+    'mode' => 'global',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Theme Icon
+    |--------------------------------------------------------------------------
+    */
+
+    'icon' => 'heroicon-o-swatch',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Theme
+    |--------------------------------------------------------------------------
+    */
+
+    'default' => [
+        'theme' => 'default',
+        'theme_color' => 'blue',
+    ],
+];
+
+
+filament-exceptions.php
+
+---content---
+
+<?php
+
+return [
+
+    'slug' => 'exceptions',
+
+    /** Show or hide in navigation/sidebar */
+    'navigation_enabled' => true,
+
+    /** Sort order, if shown. No effect, if navigation_enabled it set to false. */
+    'navigation_sort' => -1,
+
+    /** Whether to show a navigation badge. No effect, if navigation_enabled it set to false. */
+    'navigation_badge' => true,
+
+    /** Whether to scope exceptions to tenant */
+    'is_scoped_to_tenant' => false,
+
+    /** Icons to use for navigation (if enabled) and pills */
+    'icons' => [
+        'navigation' => 'heroicon-o-cpu-chip',
+        'exception' => 'heroicon-o-cpu-chip',
+        'headers' => 'heroicon-o-arrows-right-left',
+        'cookies' => 'heroicon-o-circle-stack',
+        'body' => 'heroicon-s-code-bracket',
+        'queries' => 'heroicon-s-circle-stack',
+    ],
+
+    'is_globally_searchable' => false,
+
+    /**-------------------------------------------------
+    * Change the default active tab
+    *
+    * Exception => 1 (Default)
+    * Headers => 2
+    * Cookies => 3
+    * Body => 4
+    * Queries => 5
+    */
+    'active_tab' => 5,
+
+    /**-------------------------------------------------
+    * Here you can define when the exceptions should be pruned
+    * The default is 7 days (a week)
+    * The format for providing period should follow carbon's format. i.e.
+    * 1 day => 'subDay()',
+    * 3 days => 'subDays(3)',
+    * 7 days => 'subWeek()',
+    * 1 month => 'subMonth()',
+    * 2 months => 'subMonths(2)',
+    *
+    */
+
+    'period' => now()->subWeek(),
+];
+
+
+services.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Third Party Services
+    |--------------------------------------------------------------------------
+    |
+    | This file is for storing the credentials for third party services such
+    | as Mailgun, Postmark, AWS and more. This file provides the de facto
+    | location for this type of information, allowing packages to have
+    | a conventional file to locate the various service credentials.
+    |
+    */
+
+    'mailgun' => [
+        'domain' => env('MAILGUN_DOMAIN'),
+        'secret' => env('MAILGUN_SECRET'),
+        'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
+        'scheme' => 'https',
+    ],
+
+    'postmark' => [
+        'token' => env('POSTMARK_TOKEN'),
+    ],
+
+    'ses' => [
+        'key' => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+    ],
+
+];
+
+
+database.php
+
+---content---
+
+<?php
+
+use Illuminate\Support\Str;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Database Connection Name
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify which of the database connections below you wish
+    | to use as your default connection for all database work. Of course
+    | you may use many connections at once using the Database library.
+    |
+    */
+
+    'default' => env('DB_CONNECTION', 'mysql'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Database Connections
+    |--------------------------------------------------------------------------
+    |
+    | Here are each of the database connections setup for your application.
+    | Of course, examples of configuring each database platform that is
+    | supported by Laravel is shown below to make development simple.
+    |
+    |
+    | All database work in Laravel is done through the PHP PDO facilities
+    | so make sure you have the driver for your particular database of
+    | choice installed on your machine before you begin development.
+    |
+    */
+
+    'connections' => [
+
+        'sqlite' => [
+            'driver' => 'sqlite',
+            'url' => env('DATABASE_URL'),
+            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'prefix' => '',
+            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+        ],
+
+        'mysql' => [
+            'driver' => 'mysql',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => env('DB_DATABASE', 'forge'),
+            'username' => env('DB_USERNAME', 'forge'),
+            'password' => env('DB_PASSWORD', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+        'pgsql' => [
+            'driver' => 'pgsql',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'forge'),
+            'username' => env('DB_USERNAME', 'forge'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
+        'sqlsrv' => [
+            'driver' => 'sqlsrv',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_HOST', 'localhost'),
+            'port' => env('DB_PORT', '1433'),
+            'database' => env('DB_DATABASE', 'forge'),
+            'username' => env('DB_USERNAME', 'forge'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
+            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Migration Repository Table
+    |--------------------------------------------------------------------------
+    |
+    | This table keeps track of all the migrations that have already run for
+    | your application. Using this information, we can determine which of
+    | the migrations on disk haven't actually been run in the database.
+    |
+    */
+
+    'migrations' => 'migrations',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Redis Databases
+    |--------------------------------------------------------------------------
+    |
+    | Redis is an open source, fast, and advanced key-value store that also
+    | provides a richer body of commands than a typical key-value system
+    | such as APC or Memcached. Laravel makes it easy to dig right in.
+    |
+    */
+
+    'redis' => [
+
+        'client' => env('REDIS_CLIENT', 'phpredis'),
+
+        'options' => [
+            'cluster' => env('REDIS_CLUSTER', 'redis'),
+            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+        ],
+
+        'default' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_DB', '0'),
+        ],
+
+        'cache' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_CACHE_DB', '1'),
+        ],
+
+    ],
+
+];
+
+
+cache.php
+
+---content---
+
+<?php
+
+use Illuminate\Support\Str;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Cache Store
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default cache connection that gets used while
+    | using this caching library. This connection is used when another is
+    | not explicitly specified when executing a given caching function.
+    |
+    */
+
+    'default' => env('CACHE_DRIVER', 'file'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache Stores
+    |--------------------------------------------------------------------------
+    |
+    | Here you may define all of the cache "stores" for your application as
+    | well as their drivers. You may even define multiple stores for the
+    | same cache driver to group types of items stored in your caches.
+    |
+    | Supported drivers: "apc", "array", "database", "file",
+    |         "memcached", "redis", "dynamodb", "octane", "null"
+    |
+    */
+
+    'stores' => [
+
+        'apc' => [
+            'driver' => 'apc',
+        ],
+
+        'array' => [
+            'driver' => 'array',
+            'serialize' => false,
+        ],
+
+        'database' => [
+            'driver' => 'database',
+            'table' => 'cache',
+            'connection' => null,
+            'lock_connection' => null,
+        ],
+
+        'file' => [
+            'driver' => 'file',
+            'path' => storage_path('framework/cache/data'),
+            'lock_path' => storage_path('framework/cache/data'),
+        ],
+
+        'memcached' => [
+            'driver' => 'memcached',
+            'persistent_id' => env('MEMCACHED_PERSISTENT_ID'),
+            'sasl' => [
+                env('MEMCACHED_USERNAME'),
+                env('MEMCACHED_PASSWORD'),
+            ],
+            'options' => [
+                // Memcached::OPT_CONNECT_TIMEOUT => 2000,
+            ],
+            'servers' => [
+                [
+                    'host' => env('MEMCACHED_HOST', '127.0.0.1'),
+                    'port' => env('MEMCACHED_PORT', 11211),
+                    'weight' => 100,
+                ],
+            ],
+        ],
+
+        'redis' => [
+            'driver' => 'redis',
+            'connection' => 'cache',
+            'lock_connection' => 'default',
+        ],
+
+        'dynamodb' => [
+            'driver' => 'dynamodb',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'table' => env('DYNAMODB_CACHE_TABLE', 'cache'),
+            'endpoint' => env('DYNAMODB_ENDPOINT'),
+        ],
+
+        'octane' => [
+            'driver' => 'octane',
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache Key Prefix
+    |--------------------------------------------------------------------------
+    |
+    | When utilizing the APC, database, memcached, Redis, or DynamoDB cache
+    | stores there might be other applications using the same cache. For
+    | that reason, you may prefix every cache key to avoid collisions.
+    |
+    */
+
+    'prefix' => env('CACHE_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_cache_'),
+
+];
+
+
+session.php
+
+---content---
+
+<?php
+
+use Illuminate\Support\Str;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Session Driver
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default session "driver" that will be used on
+    | requests. By default, we will use the lightweight native driver but
+    | you may specify any of the other wonderful drivers provided here.
+    |
+    | Supported: "file", "cookie", "database", "apc",
+    |            "memcached", "redis", "dynamodb", "array"
+    |
+    */
+
+    'driver' => env('SESSION_DRIVER', 'file'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Lifetime
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the number of minutes that you wish the session
+    | to be allowed to remain idle before it expires. If you want them
+    | to immediately expire on the browser closing, set that option.
+    |
+    */
+
+    'lifetime' => env('SESSION_LIFETIME', 120),
+
+    'expire_on_close' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Encryption
+    |--------------------------------------------------------------------------
+    |
+    | This option allows you to easily specify that all of your session data
+    | should be encrypted before it is stored. All encryption will be run
+    | automatically by Laravel and you can use the Session like normal.
+    |
+    */
+
+    'encrypt' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session File Location
+    |--------------------------------------------------------------------------
+    |
+    | When using the native session driver, we need a location where session
+    | files may be stored. A default has been set for you but a different
+    | location may be specified. This is only needed for file sessions.
+    |
+    */
+
+    'files' => storage_path('framework/sessions'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Database Connection
+    |--------------------------------------------------------------------------
+    |
+    | When using the "database" or "redis" session drivers, you may specify a
+    | connection that should be used to manage these sessions. This should
+    | correspond to a connection in your database configuration options.
+    |
+    */
+
+    'connection' => env('SESSION_CONNECTION'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Database Table
+    |--------------------------------------------------------------------------
+    |
+    | When using the "database" session driver, you may specify the table we
+    | should use to manage the sessions. Of course, a sensible default is
+    | provided for you; however, you are free to change this as needed.
+    |
+    */
+
+    'table' => 'sessions',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Cache Store
+    |--------------------------------------------------------------------------
+    |
+    | While using one of the framework's cache driven session backends you may
+    | list a cache store that should be used for these sessions. This value
+    | must match with one of the application's configured cache "stores".
+    |
+    | Affects: "apc", "dynamodb", "memcached", "redis"
+    |
+    */
+
+    'store' => env('SESSION_STORE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Sweeping Lottery
+    |--------------------------------------------------------------------------
+    |
+    | Some session drivers must manually sweep their storage location to get
+    | rid of old sessions from storage. Here are the chances that it will
+    | happen on a given request. By default, the odds are 2 out of 100.
+    |
+    */
+
+    'lottery' => [2, 100],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Cookie Name
+    |--------------------------------------------------------------------------
+    |
+    | Here you may change the name of the cookie used to identify a session
+    | instance by ID. The name specified here will get used every time a
+    | new session cookie is created by the framework for every driver.
+    |
+    */
+
+    'cookie' => env(
+        'SESSION_COOKIE',
+        Str::slug(env('APP_NAME', 'laravel'), '_').'_session'
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Cookie Path
+    |--------------------------------------------------------------------------
+    |
+    | The session cookie path determines the path for which the cookie will
+    | be regarded as available. Typically, this will be the root path of
+    | your application but you are free to change this when necessary.
+    |
+    */
+
+    'path' => '/',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session Cookie Domain
+    |--------------------------------------------------------------------------
+    |
+    | Here you may change the domain of the cookie used to identify a session
+    | in your application. This will determine which domains the cookie is
+    | available to in your application. A sensible default has been set.
+    |
+    */
+
+    'domain' => env('SESSION_DOMAIN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTPS Only Cookies
+    |--------------------------------------------------------------------------
+    |
+    | By setting this option to true, session cookies will only be sent back
+    | to the server if the browser has a HTTPS connection. This will keep
+    | the cookie from being sent to you when it can't be done securely.
+    |
+    */
+
+    'secure' => env('SESSION_SECURE_COOKIE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Access Only
+    |--------------------------------------------------------------------------
+    |
+    | Setting this value to true will prevent JavaScript from accessing the
+    | value of the cookie and the cookie will only be accessible through
+    | the HTTP protocol. You are free to modify this option if needed.
+    |
+    */
+
+    'http_only' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Same-Site Cookies
+    |--------------------------------------------------------------------------
+    |
+    | This option determines how your cookies behave when cross-site requests
+    | take place, and can be used to mitigate CSRF attacks. By default, we
+    | will set this value to "lax" since this is a secure default value.
+    |
+    | Supported: "lax", "strict", "none", null
+    |
+    */
+
+    'same_site' => 'lax',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Partitioned Cookies
+    |--------------------------------------------------------------------------
+    |
+    | Setting this value to true will tie the cookie to the top-level site for
+    | a cross-site context. Partitioned cookies are accepted by the browser
+    | when flagged "secure" and the Same-Site attribute is set to "none".
+    |
+    */
+
+    'partitioned' => false,
+
+];
+
+
+filament-route-statistics.php
+
+---content---
+
+<?php
+
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Default sort colun and direction
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default sort column and direction used.
+    | 
+    */
+
+    'sort' => [
+        'column' => 'id',
+        'direction' => 'desc',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    |  Default column to use as username
+    |--------------------------------------------------------------------------
+    |
+    |  This option controls the default column to use as username.
+    | 
+    */
+
+    'username' => [
+        'column' => 'email'
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    |  Default column to use as team name
+    |--------------------------------------------------------------------------
+    |
+    |  This option controls the default column to use as team name.
+    |  Example:
+    |  model: App\Models\Team::class, 
+    |  column: 'name'
+    */
+
+    'team' => [
+        'model' => env('FILAMENT_ROUTE_STATISTICS_TEAM_MODEL', null),
+        'column' => 'name'
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    |   Default slug for the resource and navigation icon
+    |--------------------------------------------------------------------------
+    | 
+    |  This option controls the default slug for the resource and navigation icon.
+    |  and the date format to use in the resource.
+    |
+    */
+
+    'resource' => [
+        'slug' => null,
+        'navigation_icon' => 'heroicon-o-chart-bar-square',
+        'date_format' => 'M j, Y H:i:s',
+    ]
+];
+
+
+queue.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Queue Connection Name
+    |--------------------------------------------------------------------------
+    |
+    | Laravel's queue API supports an assortment of back-ends via a single
+    | API, giving you convenient access to each back-end using the same
+    | syntax for every one. Here you may define a default connection.
+    |
+    */
+
+    'default' => env('QUEUE_CONNECTION', 'sync'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Connections
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure the connection information for each server that
+    | is used by your application. A default configuration has been added
+    | for each back-end shipped with Laravel. You are free to add more.
+    |
+    | Drivers: "sync", "database", "beanstalkd", "sqs", "redis", "null"
+    |
+    */
+
+    'connections' => [
+
+        'sync' => [
+            'driver' => 'sync',
+        ],
+
+        'database' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'default',
+            'retry_after' => 90,
+            'after_commit' => false,
+        ],
+
+        'beanstalkd' => [
+            'driver' => 'beanstalkd',
+            'host' => 'localhost',
+            'queue' => 'default',
+            'retry_after' => 90,
+            'block_for' => 0,
+            'after_commit' => false,
+        ],
+
+        'sqs' => [
+            'driver' => 'sqs',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'prefix' => env('SQS_PREFIX', 'https://sqs.us-east-1.amazonaws.com/your-account-id'),
+            'queue' => env('SQS_QUEUE', 'default'),
+            'suffix' => env('SQS_SUFFIX'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'after_commit' => false,
+        ],
+
+        'redis' => [
+            'driver' => 'redis',
+            'connection' => 'default',
+            'queue' => env('REDIS_QUEUE', 'default'),
+            'retry_after' => 90,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Job Batching
+    |--------------------------------------------------------------------------
+    |
+    | The following options configure the database and table that store job
+    | batching information. These options can be updated to any database
+    | connection and table which has been defined by your application.
+    |
+    */
+
+    'batching' => [
+        'database' => env('DB_CONNECTION', 'mysql'),
+        'table' => 'job_batches',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Failed Queue Jobs
+    |--------------------------------------------------------------------------
+    |
+    | These options configure the behavior of failed queue job logging so you
+    | can control which database and table are used to store the jobs that
+    | have failed. You may change them to any database / table you wish.
+    |
+    */
+
+    'failed' => [
+        'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
+        'database' => env('DB_CONNECTION', 'mysql'),
+        'table' => 'failed_jobs',
+    ],
+
+];
+
+
+broadcasting.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Broadcaster
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the default broadcaster that will be used by the
+    | framework when an event needs to be broadcast. You may set this to
+    | any of the connections defined in the "connections" array below.
+    |
+    | Supported: "pusher", "ably", "redis", "log", "null"
+    |
+    */
+
+    'default' => env('BROADCAST_DRIVER', 'null'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Broadcast Connections
+    |--------------------------------------------------------------------------
+    |
+    | Here you may define all of the broadcast connections that will be used
+    | to broadcast events to other systems or over websockets. Samples of
+    | each available type of connection are provided inside this array.
+    |
+    */
+
+    'connections' => [
+
+        'pusher' => [
+            'driver' => 'pusher',
+            'key' => env('PUSHER_APP_KEY'),
+            'secret' => env('PUSHER_APP_SECRET'),
+            'app_id' => env('PUSHER_APP_ID'),
+            'options' => [
+                'cluster' => env('PUSHER_APP_CLUSTER'),
+                'host' => env('PUSHER_HOST') ?: 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com',
+                'port' => env('PUSHER_PORT', 443),
+                'scheme' => env('PUSHER_SCHEME', 'https'),
+                'encrypted' => true,
+                'useTLS' => env('PUSHER_SCHEME', 'https') === 'https',
+            ],
+            'client_options' => [
+                // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
+            ],
+        ],
+
+        'ably' => [
+            'driver' => 'ably',
+            'key' => env('ABLY_KEY'),
+        ],
+
+        'redis' => [
+            'driver' => 'redis',
+            'connection' => 'default',
+        ],
+
+        'log' => [
+            'driver' => 'log',
+        ],
+
+        'null' => [
+            'driver' => 'null',
+        ],
+
+    ],
+
+];
+
+
+view.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | View Storage Paths
+    |--------------------------------------------------------------------------
+    |
+    | Most templating systems load templates from disk. Here you may specify
+    | an array of paths that should be checked for your views. Of course
+    | the usual Laravel view path has already been registered for you.
+    |
+    */
+
+    'paths' => [
+        resource_path('views'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Compiled View Path
+    |--------------------------------------------------------------------------
+    |
+    | This option determines where all the compiled Blade templates will be
+    | stored for your application. Typically, this is within the storage
+    | directory. However, as usual, you are free to change this value.
+    |
+    */
+
+    'compiled' => env(
+        'VIEW_COMPILED_PATH',
+        realpath(storage_path('framework/views'))
+    ),
+
+];
+
+
+cors.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cross-Origin Resource Sharing (CORS) Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure your settings for cross-origin resource sharing
+    | or "CORS". This determines what cross-origin operations may execute
+    | in web browsers. You are free to adjust these settings as needed.
+    |
+    | To learn more: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+    |
+    */
+
+    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+
+    'allowed_methods' => ['*'],
+
+    'allowed_origins' => ['*'],
+
+    'allowed_origins_patterns' => [],
+
+    'allowed_headers' => ['*'],
+
+    'exposed_headers' => [],
+
+    'max_age' => 0,
+
+    'supports_credentials' => false,
+
+];
+
+
+logging.php
+
+---content---
+
+<?php
+
+use Monolog\Handler\NullHandler;
+use Monolog\Handler\StreamHandler;
+use Monolog\Handler\SyslogUdpHandler;
+use Monolog\Processor\PsrLogMessageProcessor;
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Log Channel
+    |--------------------------------------------------------------------------
+    |
+    | This option defines the default log channel that gets used when writing
+    | messages to the logs. The name specified in this option should match
+    | one of the channels defined in the "channels" configuration array.
+    |
+    */
+
+    'default' => env('LOG_CHANNEL', 'stack'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Deprecations Log Channel
+    |--------------------------------------------------------------------------
+    |
+    | This option controls the log channel that should be used to log warnings
+    | regarding deprecated PHP and library features. This allows you to get
+    | your application ready for upcoming major versions of dependencies.
+    |
+    */
+
+    'deprecations' => [
+        'channel' => env('LOG_DEPRECATIONS_CHANNEL', 'null'),
+        'trace' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Log Channels
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure the log channels for your application. Out of
+    | the box, Laravel uses the Monolog PHP logging library. This gives
+    | you a variety of powerful log handlers / formatters to utilize.
+    |
+    | Available Drivers: "single", "daily", "slack", "syslog",
+    |                    "errorlog", "monolog",
+    |                    "custom", "stack"
+    |
+    */
+
+    'channels' => [
+        'stack' => [
+            'driver' => 'stack',
+            'channels' => ['single'],
+            'ignore_exceptions' => false,
+        ],
+
+        'single' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/laravel.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
+        'daily' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/laravel.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
+        'slack' => [
+            'driver' => 'slack',
+            'url' => env('LOG_SLACK_WEBHOOK_URL'),
+            'username' => 'Laravel Log',
+            'emoji' => ':boom:',
+            'level' => env('LOG_LEVEL', 'critical'),
+            'replace_placeholders' => true,
+        ],
+
+        'papertrail' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'handler' => env('LOG_PAPERTRAIL_HANDLER', SyslogUdpHandler::class),
+            'handler_with' => [
+                'host' => env('PAPERTRAIL_URL'),
+                'port' => env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
+            ],
+            'processors' => [PsrLogMessageProcessor::class],
+        ],
+
+        'stderr' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'handler' => StreamHandler::class,
+            'formatter' => env('LOG_STDERR_FORMATTER'),
+            'with' => [
+                'stream' => 'php://stderr',
+            ],
+            'processors' => [PsrLogMessageProcessor::class],
+        ],
+
+        'syslog' => [
+            'driver' => 'syslog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'facility' => LOG_USER,
+            'replace_placeholders' => true,
+        ],
+
+        'errorlog' => [
+            'driver' => 'errorlog',
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
+        'null' => [
+            'driver' => 'monolog',
+            'handler' => NullHandler::class,
+        ],
+
+        'emergency' => [
+            'path' => storage_path('logs/laravel.log'),
+        ],
+    ],
+
+];
+
+
+permission.php
+
+---content---
+
+<?php
+
+return [
+
+    'models' => [
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * Eloquent model should be used to retrieve your permissions. Of course, it
+         * is often just the "Permission" model but you may use whatever you like.
+         *
+         * The model you want to use as a Permission model needs to implement the
+         * `Spatie\Permission\Contracts\Permission` contract.
+         */
+
+        'permission' => Spatie\Permission\Models\Permission::class,
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * Eloquent model should be used to retrieve your roles. Of course, it
+         * is often just the "Role" model but you may use whatever you like.
+         *
+         * The model you want to use as a Role model needs to implement the
+         * `Spatie\Permission\Contracts\Role` contract.
+         */
+
+        'role' => Spatie\Permission\Models\Role::class,
+
+    ],
+
+    'table_names' => [
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your roles. We have chosen a basic
+         * default value but you may easily change it to any table you like.
+         */
+
+        'roles' => 'roles',
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * table should be used to retrieve your permissions. We have chosen a basic
+         * default value but you may easily change it to any table you like.
+         */
+
+        'permissions' => 'permissions',
+
+        /*
+         * When using the "HasPermissions" trait from this package, we need to know which
+         * table should be used to retrieve your models permissions. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'model_has_permissions' => 'model_has_permissions',
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your models roles. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'model_has_roles' => 'model_has_roles',
+
+        /*
+         * When using the "HasRoles" trait from this package, we need to know which
+         * table should be used to retrieve your roles permissions. We have chosen a
+         * basic default value but you may easily change it to any table you like.
+         */
+
+        'role_has_permissions' => 'role_has_permissions',
+    ],
+
+    'column_names' => [
+        /*
+         * Change this if you want to name the related pivots other than defaults
+         */
+        'role_pivot_key' => null, //default 'role_id',
+        'permission_pivot_key' => null, //default 'permission_id',
+
+        /*
+         * Change this if you want to name the related model primary key other than
+         * `model_id`.
+         *
+         * For example, this would be nice if your primary keys are all UUIDs. In
+         * that case, name this `model_uuid`.
+         */
+
+        'model_morph_key' => 'model_id',
+
+        /*
+         * Change this if you want to use the teams feature and your related model's
+         * foreign key is other than `team_id`.
+         */
+
+        'team_foreign_key' => 'team_id',
+    ],
+
+    /*
+     * When set to true, the method for checking permissions will be registered on the gate.
+     * Set this to false if you want to implement custom logic for checking permissions.
+     */
+
+    'register_permission_check_method' => true,
+
+    /*
+     * When set to true, Laravel\Octane\Events\OperationTerminated event listener will be registered
+     * this will refresh permissions on every TickTerminated, TaskTerminated and RequestTerminated
+     * NOTE: This should not be needed in most cases, but an Octane/Vapor combination benefited from it.
+     */
+    'register_octane_reset_listener' => false,
+
+    /*
+     * Teams Feature.
+     * When set to true the package implements teams using the 'team_foreign_key'.
+     * If you want the migrations to register the 'team_foreign_key', you must
+     * set this to true before doing the migration.
+     * If you already did the migration then you must make a new migration to also
+     * add 'team_foreign_key' to 'roles', 'model_has_roles', and 'model_has_permissions'
+     * (view the latest version of this package's migration file)
+     */
+
+    'teams' => false,
+
+    /*
+     * Passport Client Credentials Grant
+     * When set to true the package will use Passports Client to check permissions
+     */
+
+    'use_passport_client_credentials' => false,
+
+    /*
+     * When set to true, the required permission names are added to exception messages.
+     * This could be considered an information leak in some contexts, so the default
+     * setting is false here for optimum safety.
+     */
+
+    'display_permission_in_exception' => false,
+
+    /*
+     * When set to true, the required role names are added to exception messages.
+     * This could be considered an information leak in some contexts, so the default
+     * setting is false here for optimum safety.
+     */
+
+    'display_role_in_exception' => false,
+
+    /*
+     * By default wildcard permission lookups are disabled.
+     * See documentation to understand supported syntax.
+     */
+
+    'enable_wildcard_permission' => false,
+
+    /*
+     * The class to use for interpreting wildcard permissions.
+     * If you need to modify delimiters, override the class and specify its name here.
+     */
+    // 'permission.wildcard_permission' => Spatie\Permission\WildcardPermission::class,
+
+    /* Cache-specific settings */
+
+    'cache' => [
+
+        /*
+         * By default all permissions are cached for 24 hours to speed up performance.
+         * When permissions or roles are updated the cache is flushed automatically.
+         */
+
+        'expiration_time' => \DateInterval::createFromDateString('24 hours'),
+
+        /*
+         * The cache key used to store all permissions.
+         */
+
+        'key' => 'spatie.permission.cache',
+
+        /*
+         * You may optionally indicate a specific cache driver to use for permission and
+         * role caching using any of the `store` drivers listed in the cache.php config
+         * file. Using 'default' here means to use the `default` set in cache.php.
+         */
+
+        'store' => 'default',
+    ],
+];
+
+
+filesystems.php
+
+---content---
+
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Filesystem Disk
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the default filesystem disk that should be used
+    | by the framework. The "local" disk, as well as a variety of cloud
+    | based disks are available to your application. Just store away!
+    |
+    */
+
+    'default' => env('FILESYSTEM_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filesystem Disks
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure as many filesystem "disks" as you wish, and you
+    | may even configure multiple disks of the same driver. Defaults have
+    | been set up for each driver as an example of the required values.
+    |
+    | Supported Drivers: "local", "ftp", "sftp", "s3"
+    |
+    */
+
+    'disks' => [
+
+        'local' => [
+            'driver' => 'local',
+            'root' => storage_path('app'),
+            'throw' => false,
+        ],
+
+        'public' => [
+            'driver' => 'local',
+            'root' => storage_path('app/public'),
+            'url' => env('APP_URL').'/storage',
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+
+        's3' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+            'url' => env('AWS_URL'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Symbolic Links
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure the symbolic links that will be created when the
+    | `storage:link` Artisan command is executed. The array keys should be
+    | the locations of the links and the values should be their targets.
+    |
+    */
+
+    'links' => [
+        public_path('storage') => storage_path('app/public'),
+    ],
+
+];
+
+

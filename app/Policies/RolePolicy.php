@@ -18,7 +18,7 @@ class RolePolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_shield::role');
+        return $user->hasRole('super_admin') && $user->can('view_any_shield::role');
     }
 
     /**
@@ -30,7 +30,7 @@ class RolePolicy
      */
     public function view(User $user, Role $role): bool
     {
-        return $user->can('view_shield::role');
+        return $user->hasRole('super_admin') && $user->can('view_shield::role');
     }
 
     /**
@@ -41,7 +41,7 @@ class RolePolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_shield::role');
+        return $user->hasRole('super_admin') && $user->can('create_shield::role');
     }
 
     /**
@@ -53,7 +53,7 @@ class RolePolicy
      */
     public function update(User $user, Role $role): bool
     {
-        return $user->can('update_shield::role');
+        return $user->hasRole('super_admin') && $user->can('update_shield::role');
     }
 
     /**
@@ -65,7 +65,7 @@ class RolePolicy
      */
     public function delete(User $user, Role $role): bool
     {
-        return $user->can('delete_shield::role');
+        return $user->hasRole('super_admin') && $user->can('delete_shield::role');
     }
 
     /**
@@ -76,7 +76,7 @@ class RolePolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_shield::role');
+        return $user->hasRole('super_admin') && $user->can('delete_any_shield::role');
     }
 
     /**
@@ -88,7 +88,7 @@ class RolePolicy
      */
     public function forceDelete(User $user, Role $role): bool
     {
-        return $user->can('{{ ForceDelete }}');
+        return $user->hasRole('super_admin') && $user->can('force_delete_shield::role');
     }
 
     /**
@@ -99,7 +99,7 @@ class RolePolicy
      */
     public function forceDeleteAny(User $user): bool
     {
-        return $user->can('{{ ForceDeleteAny }}');
+        return $user->hasRole('super_admin') && $user->can('force_delete_any_shield::role');
     }
 
     /**
@@ -111,7 +111,7 @@ class RolePolicy
      */
     public function restore(User $user, Role $role): bool
     {
-        return $user->can('{{ Restore }}');
+        return $user->hasRole('super_admin') && $user->can('restore_shield::role');
     }
 
     /**
@@ -122,7 +122,7 @@ class RolePolicy
      */
     public function restoreAny(User $user): bool
     {
-        return $user->can('{{ RestoreAny }}');
+        return $user->hasRole('super_admin') && $user->can('restore_any_shield::role');
     }
 
     /**
@@ -134,7 +134,7 @@ class RolePolicy
      */
     public function replicate(User $user, Role $role): bool
     {
-        return $user->can('{{ Replicate }}');
+        return $user->hasRole('super_admin') && $user->can('replicate_shield::role');
     }
 
     /**
@@ -145,7 +145,6 @@ class RolePolicy
      */
     public function reorder(User $user): bool
     {
-        return $user->can('{{ Reorder }}');
+        return $user->hasRole('super_admin') && $user->can('reorder_shield::role');
     }
-
 }

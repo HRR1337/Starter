@@ -34,31 +34,66 @@ class TeamResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->unique(ignorable: fn ($record) => $record),
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
+            ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('slug')
-                    ->searchable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('users.name')
+                    ->badge()
+                    ->label('Members')
+                    ->searchable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn (Team $record) => 
+                        auth()->user()->hasRole('super_admin') || 
+                        $record->created_by === auth()->id()
+                    ),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn (Team $record) => 
+                        auth()->user()->hasRole('super_admin') || 
+                        ($record->created_by === auth()->id() && $record->users()->count() <= 1)
+                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if(auth()->user()->hasRole('super_admin')) {
+            return $query;
+        }
+
+        if (auth()->user()->hasRole('team_admin')) {
+            return $query->where(function ($query) {
+                $query->whereIn('id', auth()->user()->teams->pluck('id'))
+                    ->orWhere('created_by', auth()->id());
+            });
+        }
+
+        return $query->whereHas('users', function ($query) {
+            $query->where('users.id', auth()->user()->id);
+        });
     }
 
     public static function getRelations(): array
@@ -75,5 +110,10 @@ class TeamResource extends Resource
             'create' => Pages\CreateTeam::route('/create'),
             'edit' => Pages\EditTeam::route('/{record}/edit'),
         ];
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()->hasRole(['super_admin', 'team_admin']);
     }
 }
