@@ -19,7 +19,6 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
-use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 use Amendozaaguiar\FilamentRouteStatistics\FilamentRouteStatisticsPlugin;
 
 
@@ -44,12 +43,9 @@ class AdminPanelProvider extends PanelProvider
             ->plugins([
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
                 \BezhanSalleh\FilamentExceptions\FilamentExceptionsPlugin::make(),
-                FilamentBackgroundsPlugin::make(),
                 FilamentRouteStatisticsPlugin::make(),
-                \Hasnayeen\Themes\ThemesPlugin::make(),
             ])
             ->brandLogo(fn () => view('components.logo'))
-            ->font('Poppins')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -72,7 +68,6 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->tenantMiddleware([
-                \Hasnayeen\Themes\Http\Middleware\SetTheme::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
