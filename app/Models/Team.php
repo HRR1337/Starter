@@ -14,4 +14,9 @@ class Team extends Model
     {
         return $this->belongsToMany(User::class);
     }
+
+    public function createdBy(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

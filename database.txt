@@ -38,6 +38,33 @@ return new class extends Migration
 };
 
 
+migrations/2024_12_18_104859_createdby.php
+
+---content---
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('teams', function (Blueprint $table) {
+            $table->foreignId('created_by')->nullable()->constrained('users')->after('slug');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('teams', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('created_by');
+        });
+    }
+};
+
 migrations/2024_02_04_135511_create_route_statistics_table.php
 
 ---content---
@@ -466,39 +493,100 @@ class RolesAndPermissionsSeeder extends Seeder
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Eerst alle permissions definiëren en aanmaken
+        // Definieer ALLE permissions
         $permissions = [
+            // Team permissions
             'view_any_team',
+            'view_team',
             'create_team',
             'update_team',
             'delete_team',
-            'view_team',
+            'delete_any_team',
+            'force_delete_team',
+            'force_delete_any_team',
+            'restore_team',
+            'restore_any_team',
+            'replicate_team',
+            'reorder_team',
+
+            // User permissions
             'view_any_user',
-            'create_user', 
+            'view_user',
+            'create_user',
             'update_user',
             'delete_user',
-            'view_user',
+            'delete_any_user',
+            'force_delete_user',
+            'force_delete_any_user',
+            'restore_user',
+            'restore_any_user',
+            'replicate_user',
+            'reorder_user',
+
+            // Exception permissions
+            'view_any_exception',
+            'view_exception',
+            'create_exception',
+            'update_exception',
+            'delete_exception',
+            'delete_any_exception',
+            'force_delete_exception',
+            'force_delete_any_exception',
+            'restore_exception',
+            'restore_any_exception',
+            'replicate_exception',
+            'reorder_exception',
+
+            // Route Statistics permissions
+            'view_any_route::statistics',
+            'view_route::statistics',
+            'create_route::statistics',
+            'update_route::statistics',
+            'delete_route::statistics',
+            'delete_any_route::statistics',
+            'force_delete_route::statistics',
+            'force_delete_any_route::statistics',
+            'restore_route::statistics',
+            'restore_any_route::statistics',
+            'replicate_route::statistics',
+            'reorder_route::statistics',
+
+            // Shield Role permissions
+            'view_any_shield::role',
+            'view_shield::role',
+            'create_shield::role',
+            'update_shield::role',
+            'delete_shield::role',
+            'delete_any_shield::role',
+            'force_delete_shield::role',
+            'restore_shield::role',
+            'restore_any_shield::role',
+            'replicate_shield::role',
+            'reorder_shield::role',
+
+            // Additional management permissions
             'manage_roles',
             'manage_permissions',
             'manage_settings',
-            // Voeg hier eventueel meer permissions toe
         ];
 
+        // Create permissions
         foreach ($permissions as $permission) {
             Permission::create(['name' => $permission]);
         }
 
-        // Rollen aanmaken
+        // Create roles
         $superAdminRole = Role::create(['name' => 'super_admin']);
         $teamAdminRole = Role::create(['name' => 'team_admin']);
         $teamMemberRole = Role::create(['name' => 'team_member']);
 
-        // Super Admin alle permissions geven
+        // Give super admin ALL permissions
         $superAdminRole->syncPermissions(Permission::all());
 
-        // Team Admin permissions toewijzen
+        // Team Admin permissions
         $teamAdminPermissions = [
             'view_any_team',
+            'create_team',
             'update_team',
             'view_any_user',
             'create_user',
@@ -508,7 +596,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
         $teamAdminRole->syncPermissions($teamAdminPermissions);
 
-        // Team Member permissions toewijzen
+        // Team Member permissions
         $teamMemberPermissions = [
             'view_team',
             'update_user',
@@ -516,7 +604,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
         $teamMemberRole->syncPermissions($teamMemberPermissions);
 
-        // Super Admin account aanmaken
+        // Create Super Admin account
         $superAdmin = User::create([
             'name' => 'Super Admin',
             'email' => 'hrr@hrr.nu',
@@ -524,15 +612,15 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
         $superAdmin->assignRole($superAdminRole);
 
-        // Team Admin account aanmaken
+        // Create Team Admin account
         $teamAdmin = User::create([
-            'name' => 'Team Admin', 
+            'name' => 'Team Admin',
             'email' => 'teamadmin@hrr.nu',
             'password' => Hash::make('password'),
         ]);
         $teamAdmin->assignRole($teamAdminRole);
 
-        // Teams aanmaken
+        // Create teams
         $team1 = Team::create([
             'name' => 'team1',
             'slug' => 'team1',
@@ -543,21 +631,21 @@ class RolesAndPermissionsSeeder extends Seeder
             'slug' => 'bds',
         ]);
 
-        // Team Admin aan team koppelen
+        // Assign Team Admin to team
         $team1->users()->attach($teamAdmin);
 
-        // Team Member account aanmaken
+        // Create Team Member account
         $teamMember = User::create([
             'name' => 'Team Member',
-            'email' => 'teammember@hrr.nu', 
+            'email' => 'teammember@hrr.nu',
             'password' => Hash::make('password'),
         ]);
         $teamMember->assignRole($teamMemberRole);
 
-        // Team Member aan team koppelen
+        // Assign Team Member to team
         $team1->users()->attach($teamMember);
 
-        // Super Admin aan alle teams koppelen
+        // Assign Super Admin to all teams
         $superAdmin->teams()->attach([$team1->id, $teamBds->id]);
     }
 }

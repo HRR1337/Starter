@@ -48,6 +48,9 @@ class TeamResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('slug')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('createdBy.name')
+                    ->label('Created By')
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 Tables\Columns\TextColumn::make('users.name')
                     ->badge()
                     ->label('Members')

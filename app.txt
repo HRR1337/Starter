@@ -240,7 +240,6 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
-use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 use Amendozaaguiar\FilamentRouteStatistics\FilamentRouteStatisticsPlugin;
 
 
@@ -251,8 +250,8 @@ class AdminPanelProvider extends PanelProvider
     {
         return $panel
             ->default()
-            ->id('admin')
-            ->path('admin')
+            ->id('bdsmanager')
+            ->path('bdsmanager')
             ->login(Login::class)
             ->colors([
                 'danger' => Color::Rose,
@@ -265,9 +264,7 @@ class AdminPanelProvider extends PanelProvider
             ->plugins([
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
                 \BezhanSalleh\FilamentExceptions\FilamentExceptionsPlugin::make(),
-                FilamentBackgroundsPlugin::make(),
                 FilamentRouteStatisticsPlugin::make(),
-                \Hasnayeen\Themes\ThemesPlugin::make(),
             ])
             ->brandLogo(fn () => view('components.logo'))
             ->font('Poppins')
@@ -293,7 +290,6 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->tenantMiddleware([
-                \Hasnayeen\Themes\Http\Middleware\SetTheme::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
@@ -471,7 +467,7 @@ class RolePolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_shield::role');
+        return $user->hasRole('super_admin') && $user->can('view_any_shield::role');
     }
 
     /**
@@ -483,7 +479,7 @@ class RolePolicy
      */
     public function view(User $user, Role $role): bool
     {
-        return $user->can('view_shield::role');
+        return $user->hasRole('super_admin') && $user->can('view_shield::role');
     }
 
     /**
@@ -494,7 +490,7 @@ class RolePolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_shield::role');
+        return $user->hasRole('super_admin') && $user->can('create_shield::role');
     }
 
     /**
@@ -506,7 +502,7 @@ class RolePolicy
      */
     public function update(User $user, Role $role): bool
     {
-        return $user->can('update_shield::role');
+        return $user->hasRole('super_admin') && $user->can('update_shield::role');
     }
 
     /**
@@ -518,7 +514,7 @@ class RolePolicy
      */
     public function delete(User $user, Role $role): bool
     {
-        return $user->can('delete_shield::role');
+        return $user->hasRole('super_admin') && $user->can('delete_shield::role');
     }
 
     /**
@@ -529,7 +525,7 @@ class RolePolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_shield::role');
+        return $user->hasRole('super_admin') && $user->can('delete_any_shield::role');
     }
 
     /**
@@ -541,7 +537,7 @@ class RolePolicy
      */
     public function forceDelete(User $user, Role $role): bool
     {
-        return $user->can('{{ ForceDelete }}');
+        return $user->hasRole('super_admin') && $user->can('force_delete_shield::role');
     }
 
     /**
@@ -552,7 +548,7 @@ class RolePolicy
      */
     public function forceDeleteAny(User $user): bool
     {
-        return $user->can('{{ ForceDeleteAny }}');
+        return $user->hasRole('super_admin') && $user->can('force_delete_any_shield::role');
     }
 
     /**
@@ -564,7 +560,7 @@ class RolePolicy
      */
     public function restore(User $user, Role $role): bool
     {
-        return $user->can('{{ Restore }}');
+        return $user->hasRole('super_admin') && $user->can('restore_shield::role');
     }
 
     /**
@@ -575,7 +571,7 @@ class RolePolicy
      */
     public function restoreAny(User $user): bool
     {
-        return $user->can('{{ RestoreAny }}');
+        return $user->hasRole('super_admin') && $user->can('restore_any_shield::role');
     }
 
     /**
@@ -587,7 +583,7 @@ class RolePolicy
      */
     public function replicate(User $user, Role $role): bool
     {
-        return $user->can('{{ Replicate }}');
+        return $user->hasRole('super_admin') && $user->can('replicate_shield::role');
     }
 
     /**
@@ -598,9 +594,8 @@ class RolePolicy
      */
     public function reorder(User $user): bool
     {
-        return $user->can('{{ Reorder }}');
+        return $user->hasRole('super_admin') && $user->can('reorder_shield::role');
     }
-
 }
 
 
@@ -772,9 +767,6 @@ class TeamPolicy
 
     /**
      * Determine whether the user can view any models.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
      */
     public function viewAny(User $user): bool
     {
@@ -782,11 +774,15 @@ class TeamPolicy
     }
 
     /**
+     * Determine whether the user can create models.
+     */
+    public function create(User $user): bool
+    {
+        return $user->hasRole(['super_admin', 'team_admin']) && $user->can('create_team');
+    }
+
+    /**
      * Determine whether the user can view the model.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function view(User $user, Team $team): bool
     {
@@ -794,57 +790,41 @@ class TeamPolicy
     }
 
     /**
-     * Determine whether the user can create models.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
-     */
-    public function create(User $user): bool
-    {
-        return $user->can('create_team');
-    }
-
-    /**
      * Determine whether the user can update the model.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function update(User $user, Team $team): bool
     {
-        return $user->can('update_team');
+        if ($user->hasRole('super_admin')) {
+            return $user->can('update_team');
+        }
+
+        return $user->can('update_team') && $team->created_by === $user->id;
     }
 
     /**
      * Determine whether the user can delete the model.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function delete(User $user, Team $team): bool
     {
-        return $user->can('delete_team');
+        if ($user->hasRole('super_admin')) {
+            return $user->can('delete_team');
+        }
+
+        return $user->can('delete_team') 
+            && $team->created_by === $user->id 
+            && $team->users()->count() <= 1;
     }
 
     /**
      * Determine whether the user can bulk delete.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_team');
+        return $user->hasRole('super_admin') && $user->can('delete_any_team');
     }
 
     /**
      * Determine whether the user can permanently delete.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function forceDelete(User $user, Team $team): bool
     {
@@ -853,9 +833,6 @@ class TeamPolicy
 
     /**
      * Determine whether the user can permanently bulk delete.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
      */
     public function forceDeleteAny(User $user): bool
     {
@@ -864,10 +841,6 @@ class TeamPolicy
 
     /**
      * Determine whether the user can restore.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function restore(User $user, Team $team): bool
     {
@@ -876,9 +849,6 @@ class TeamPolicy
 
     /**
      * Determine whether the user can bulk restore.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
      */
     public function restoreAny(User $user): bool
     {
@@ -887,10 +857,6 @@ class TeamPolicy
 
     /**
      * Determine whether the user can replicate.
-     *
-     * @param  \App\Models\User  $user
-     * @param  \App\Models\Team  $team
-     * @return bool
      */
     public function replicate(User $user, Team $team): bool
     {
@@ -899,15 +865,11 @@ class TeamPolicy
 
     /**
      * Determine whether the user can reorder.
-     *
-     * @param  \App\Models\User  $user
-     * @return bool
      */
     public function reorder(User $user): bool
     {
         return $user->can('reorder_team');
     }
-
 }
 
 
@@ -1238,14 +1200,10 @@ use App\Models\User;
 use Filament\Tables;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
-use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use App\Filament\Resources\UserResource\RelationManagers;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
-
 
 class UserResource extends Resource
 {
@@ -1276,35 +1234,43 @@ class UserResource extends Resource
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create')
                             ->maxLength(255),
+                        // Alleen super_admin kan roles toewijzen
                         Forms\Components\Select::make('roles')
                             ->relationship('roles', 'name', function($query) {
                                 if(auth()->user()->hasRole('super_admin')) {
                                     return $query;
                                 }
-                                return $query->whereNot('id', 1);
+                                // Team admin kan alleen team_member rol toewijzen
+                                return $query->where('name', 'team_member');
                             })
                             ->multiple()
                             ->preload()
-                            ->searchable(),
+                            ->searchable()
+                            ->visible(fn () => auth()->user()->hasRole(['super_admin', 'team_admin'])),
                     ])->columns(2),
                 Forms\Components\Section::make(__('Tenant'))
                     ->description('Selecting Multi Tenancy will allow you to assign the user to a tenant.')
                     ->schema([
                         Forms\Components\Select::make('teams')
                             ->label(__('Tenant'))
-                            ->relationship('teams', 'name')
+                            ->relationship('teams', 'name', function($query) {
+                                if(auth()->user()->hasRole('super_admin')) {
+                                    return $query;
+                                }
+                                // Team admin ziet alleen eigen teams
+                                return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
+                            })
                             ->multiple()
                             ->preload()
-                            ->searchable(),
+                            ->searchable()
+                            ->required(),
                     ])
-
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
@@ -1323,36 +1289,38 @@ class UserResource extends Resource
                 //
             ])
             ->actions([
-                Impersonate::make(),
+                Impersonate::make()->visible(fn ($record) => auth()->user()->hasRole('super_admin')),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ]);
-    }
-
-    public static function isScopedToTenant(): bool
-    {
-        if(auth()->user()->hasRole('super_admin')) {
-            return false;
-        }
-        return true;
     }
 
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
 
-        if(auth()->user()->hasRole('super_admin')) {
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            
+            return $query
+                // Alleen users in dezelfde teams
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                })
+                // Exclude super_admin en andere team_admins
+                ->whereDoesntHave('roles', function ($query) {
+                    $query->whereIn('name', ['super_admin', 'team_admin']);
+                })
+                // Exclude jezelf
+                ->where('users.id', '!=', auth()->id());
+        }
+
+        if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
 
-        if (auth()->user()->hasRole('team_admin')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-            return $query->whereHas('teams', function ($query) use ($teamIds) {
-                $query->whereIn('teams.id', $teamIds);
-            });
-        }
-
-        return $query->where('id', auth()->user()->id);
+        // Voor alle andere users, alleen eigen profiel
+        return $query->where('users.id', auth()->id());
     }
 
     public static function getRelations(): array
@@ -1370,7 +1338,21 @@ class UserResource extends Resource
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
     }
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        // Zorg ervoor dat team_member rol automatisch wordt toegewezen bij het aanmaken door team_admin
+        if (auth()->user()->hasRole('team_admin') && !isset($data['roles'])) {
+            $teamMemberRole = \Spatie\Permission\Models\Role::where('name', 'team_member')->first();
+            if ($teamMemberRole) {
+                $data['roles'] = [$teamMemberRole->id];
+            }
+        }
+
+        return $data;
+    }
 }
+
 
 Filament/Resources/TeamResource.php
 
@@ -1412,7 +1394,8 @@ class TeamResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->unique(ignorable: fn ($record) => $record),
             ]);
     }
 
@@ -1424,18 +1407,31 @@ class TeamResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('slug')
-                    ->searchable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('users.name')
+                    ->badge()
+                    ->label('Members')
+                    ->searchable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn (Team $record) => 
+                        auth()->user()->hasRole('super_admin') || 
+                        $record->created_by === auth()->id()
+                    ),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn (Team $record) => 
+                        auth()->user()->hasRole('super_admin') || 
+                        ($record->created_by === auth()->id() && $record->users()->count() <= 1)
+                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
     }
@@ -1449,13 +1445,15 @@ class TeamResource extends Resource
         }
 
         if (auth()->user()->hasRole('team_admin')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-            return $query->whereIn('id', $teamIds);
+            return $query->where(function ($query) {
+                $query->whereIn('id', auth()->user()->teams->pluck('id'))
+                    ->orWhere('created_by', auth()->id());
+            });
         }
 
         return $query->whereHas('users', function ($query) {
             $query->where('users.id', auth()->user()->id);
-         });
+        });
     }
 
     public static function getRelations(): array
@@ -1473,7 +1471,13 @@ class TeamResource extends Resource
             'edit' => Pages\EditTeam::route('/{record}/edit'),
         ];
     }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()->hasRole(['super_admin', 'team_admin']);
+    }
 }
+
 
 Filament/Resources/Shield/RoleResource.php
 
@@ -1635,7 +1639,7 @@ class RoleResource extends Resource implements HasShieldPermissions
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Utils::isResourceNavigationRegistered();
+        return auth()->user()->hasRole('super_admin');
     }
 
     public static function getNavigationGroup(): ?string
@@ -2160,15 +2164,13 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateTeam extends CreateRecord
 {
     use GenerateSlug;
+    
     protected static string $resource = TeamResource::class;
 
-    protected function mutateFormDataBeforeCreate(
-        array $data
-    ): array {
-
-        $data['slug'] = $this->generateSlug(
-            $data['name'],'teams'
-        );
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['slug'] = $this->generateSlug($data['name'], 'teams');
+        $data['created_by'] = auth()->id();
 
         return $data;
     }
@@ -2180,10 +2182,7 @@ class CreateTeam extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $this
-            ->record
-            ->users()
-            ->attach(User::find(1));
+        $this->record->users()->attach(auth()->user());
     }
 }
 
