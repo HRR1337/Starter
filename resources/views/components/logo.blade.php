@@ -1,3 +1,3 @@
 <div class="text-xl">
-    <span class="font-bold">BDS</span> Manager
+    <span class="text-primary-500 font-medium">Filament</span> Starter
 </div>
