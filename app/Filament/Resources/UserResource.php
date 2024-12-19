@@ -105,27 +105,23 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-
+    
         if (auth()->user()->hasRole('team_admin')) {
             $teamIds = auth()->user()->teams->pluck('id');
-            
+    
             return $query
                 // Alleen users in dezelfde teams
                 ->whereHas('teams', function ($query) use ($teamIds) {
                     $query->whereIn('teams.id', $teamIds);
                 })
-                // Exclude super_admin en andere team_admins
-                ->whereDoesntHave('roles', function ($query) {
-                    $query->whereIn('name', ['super_admin', 'team_admin']);
-                })
                 // Exclude jezelf
                 ->where('users.id', '!=', auth()->id());
         }
-
+    
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
-
+    
         // Voor alle andere users, alleen eigen profiel
         return $query->where('users.id', auth()->id());
     }

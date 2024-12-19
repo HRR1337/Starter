@@ -31,7 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('bdsmanager')
             ->path('bdsmanager')
-            ->login(Login::class)
+            ->login()
             ->colors([
                 'danger' => Color::Rose,
                 'gray' => Color::Gray,
