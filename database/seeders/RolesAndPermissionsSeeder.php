@@ -116,6 +116,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'update_user',
             'delete_user',
             'view_team',
+            'delete_team',
         ];
         $teamAdminRole->syncPermissions($teamAdminPermissions);
 
@@ -147,11 +148,13 @@ class RolesAndPermissionsSeeder extends Seeder
         $team1 = Team::create([
             'name' => 'team1',
             'slug' => 'team1',
+            'created_by' => $teamAdmin->id, // Team1 aangemaakt door Team Admin
         ]);
 
         $teamBds = Team::create([
             'name' => 'bds',
             'slug' => 'bds',
+            'created_by' => $superAdmin->id, // BDS aangemaakt door Super Admin
         ]);
 
         // Assign Team Admin to team
