@@ -154,14 +154,14 @@ class RoleResource extends Resource implements HasShieldPermissions
 
     public static function shouldRegisterNavigation(): bool
     {
-        return auth()->user()->hasRole('super_admin');
+        return auth()->check() && auth()->user()->hasRole('super_admin');
     }
 
     public static function getNavigationGroup(): ?string
     {
-        return Utils::isResourceNavigationGroupEnabled()
+        return auth()->check() && auth()->user()->hasRole('super_admin')
             ? __('filament-shield::filament-shield.nav.group')
-            : '';
+            : null;
     }
 
     public static function getNavigationLabel(): string
@@ -365,5 +365,10 @@ class RoleResource extends Resource implements HasShieldPermissions
             ->gridDirection('row')
             ->columns(FilamentShieldPlugin::get()->getCheckboxListColumns())
             ->columnSpan(FilamentShieldPlugin::get()->getCheckboxListColumnSpan());
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->check() && auth()->user()->hasRole('super_admin');
     }
 }
