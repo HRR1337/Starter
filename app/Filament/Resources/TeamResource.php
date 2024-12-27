@@ -13,6 +13,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
+
 class TeamResource extends Resource
 {
     protected static ?string $model = Team::class;
@@ -65,11 +66,20 @@ class TeamResource extends Resource
                         auth()->user()->hasRole('super_admin') || 
                         $record->created_by === auth()->id()
                     ),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Team $record) => 
-                        auth()->user()->hasRole('super_admin') || 
-                        ($record->created_by === auth()->id() && $record->users()->count() <= 1)
-                    ),
+                    Tables\Actions\DeleteAction::make()
+                    ->visible(function (Team $record) {
+                        if (auth()->user()->hasRole('super_admin')) {
+                            return true;
+                        }
+                        
+                        if (auth()->user()->hasRole('team_admin')) {
+                            $currentTenantSlug = request()->tenant;
+                            $currentTenant = Team::where('slug', $currentTenantSlug)->first();
+                            return $record->id !== $currentTenant?->id;
+                        }
+                        
+                        return false;
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

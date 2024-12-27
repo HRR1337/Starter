@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\User;
 use App\Models\Team;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class TeamPolicy
@@ -55,9 +56,16 @@ class TeamPolicy
             return $user->can('delete_team');
         }
 
-        return $user->can('delete_team') 
-            && $team->created_by === $user->id 
-            && $team->users()->count() <= 1;
+        // Voor team_admin:
+        if ($user->hasRole('team_admin')) {
+            // Check of dit team NIET de huidige actieve tenant is
+            $currentTenant = Filament::getTenant();
+            
+            return $user->can('delete_team') 
+                && $team->id !== $currentTenant?->id;
+        }
+
+        return false;
     }
 
     /**
