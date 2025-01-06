@@ -110,19 +110,33 @@ class UserResource extends Resource
             $teamIds = auth()->user()->teams->pluck('id');
     
             return $query
-                // Alleen users in dezelfde teams
+                // Exclude super_admin users
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                // Only users in same teams
                 ->whereHas('teams', function ($query) use ($teamIds) {
                     $query->whereIn('teams.id', $teamIds);
                 })
-                // Exclude jezelf
+                // Exclude yourself
                 ->where('users.id', '!=', auth()->id());
+        }
+    
+        if (auth()->user()->hasRole('team_member')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+    
+            return $query
+                // Exclude super_admin users
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                // Only users in same teams
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                });
         }
     
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
     
-        // Voor alle andere users, alleen eigen profiel
+        // For all other users, only own profile
         return $query->where('users.id', auth()->id());
     }
 

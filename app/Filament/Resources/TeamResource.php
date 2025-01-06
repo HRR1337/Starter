@@ -10,6 +10,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -51,24 +52,20 @@ class TeamResource extends Resource
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
-                Tables\Columns\TextColumn::make('users.name')
-                    ->badge()
-                    ->label('Members')
-                    ->searchable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (Team $record) => 
-                        auth()->user()->hasRole('super_admin') || 
+                    ->visible(fn (Team $record) =>
+                        auth()->user()->hasRole('super_admin') ||
                         $record->created_by === auth()->id()
                     ),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Team $record) => 
-                        auth()->user()->hasRole('super_admin') || 
-                        ($record->created_by === auth()->id() && $record->users()->count() <= 1)
+                    ->visible(fn (Team $record) =>
+                        auth()->user()->hasRole('super_admin') ||
+                        ($record->created_by === auth()->id() && $record->id !== Filament::getTenant()->id)
                     ),
             ])
             ->bulkActions([

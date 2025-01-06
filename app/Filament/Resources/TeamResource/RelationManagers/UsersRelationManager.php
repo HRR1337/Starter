@@ -48,6 +48,13 @@ class UsersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (Builder $query) {
+                // If not super_admin, exclude super_admin users
+                if (!auth()->user()->hasRole('super_admin')) {
+                    $query->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'));
+                }
+                return $query;
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('name'),
                 Tables\Columns\TextColumn::make('email'),
