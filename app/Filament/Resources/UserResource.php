@@ -5,11 +5,13 @@ namespace App\Filament\Resources;
 use Filament\Forms;
 use App\Models\User;
 use Filament\Tables;
+use App\Models\Team;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
+use Illuminate\Support\Str;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
 
 class UserResource extends Resource
@@ -41,13 +43,11 @@ class UserResource extends Resource
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create')
                             ->maxLength(255),
-                        // Alleen super_admin kan roles toewijzen
                         Forms\Components\Select::make('roles')
                             ->relationship('roles', 'name', function($query) {
                                 if(auth()->user()->hasRole('super_admin')) {
                                     return $query;
                                 }
-                                // Team admin kan alleen team_member rol toewijzen
                                 return $query->where('name', 'team_member');
                             })
                             ->multiple()
@@ -56,22 +56,44 @@ class UserResource extends Resource
                             ->visible(fn () => auth()->user()->hasRole(['super_admin', 'team_admin'])),
                     ])->columns(2),
                 Forms\Components\Section::make(__('Tenant'))
-                    ->description('Selecting Multi Tenancy will allow you to assign the user to a tenant.')
+                    ->description('Select an existing team or create a new one.')
                     ->schema([
-                        Forms\Components\Select::make('teams')
-                            ->label(__('Tenant'))
-                            ->relationship('teams', 'name', function($query) {
-                                if(auth()->user()->hasRole('super_admin')) {
-                                    return $query;
-                                }
-                                // Team admin ziet alleen eigen teams
-                                return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
-                            })
-                            ->multiple()
-                            ->preload()
-                            ->searchable()
-                            ->required(),
-                    ])
+                        Forms\Components\Grid::make()
+                            ->schema([
+                                Forms\Components\Select::make('teams')
+                                    ->label('Existing Teams')
+                                    ->relationship('teams', 'name', function($query) {
+                                        if(auth()->user()->hasRole('super_admin')) {
+                                            return $query;
+                                        }
+                                        return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
+                                    })
+                                    ->multiple()
+                                    ->preload()
+                                    ->searchable(),
+                                
+                                Forms\Components\Toggle::make('create_new_team')
+                                    ->label('Create New Team')
+                                    ->reactive()
+                                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                                
+                                Forms\Components\TextInput::make('new_team_name')
+                                    ->label('New Team Name')
+                                    ->visible(fn (callable $get) => $get('create_new_team'))
+                                    ->required(fn (callable $get) => $get('create_new_team'))
+                                    ->unique(Team::class, 'name')
+                                    ->rules(['required_if:create_new_team,true'])
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        $set('new_team_slug', Str::slug($state));
+                                    }),
+                                
+                                Forms\Components\TextInput::make('new_team_slug')
+                                    ->label('Team Slug')
+                                    ->visible(fn (callable $get) => $get('create_new_team'))
+                                    ->disabled()
+                                    ->dehydrated(fn (callable $get) => $get('create_new_team')),
+                            ]),
+                    ]),
             ]);
     }
 

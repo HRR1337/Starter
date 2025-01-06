@@ -14,6 +14,7 @@ use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
+
 class TeamResource extends Resource
 {
     protected static ?string $model = Team::class;
