@@ -13,24 +13,7 @@ trait GenerateSlug
 {
     protected function generateSlug($name, $tableName)
     {
-        $slug = Str::slug($name, '-');
-
-        $allSlugs = DB::table($tableName)
-            ->select('slug')
-            ->where('slug', 'like', $slug.'%')
-            ->get();
-
-        if (! $allSlugs->contains('slug', $slug)) {
-            return $slug;
-        }
-
-        for ($i = 1; $i <= 100; $i++) {
-            $newSlug = $slug.'-'.$i;
-
-            if (! $allSlugs->contains('slug', $newSlug)) {
-                return $newSlug;
-            }
-        }
+        return substr(md5(uniqid(auth()->id(), true)), 0, 8);
     }
 }
 
@@ -1448,8 +1431,6 @@ class TeamResource extends Resource
             ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')

@@ -12,6 +12,7 @@ use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
 use Illuminate\Support\Str;
+use Filament\Facades\Filament;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
 
 class UserResource extends Resource
@@ -19,6 +20,8 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-lock-closed';
+
+    protected static bool $isScopedToTenant = false;
 
     public static function getNavigationGroup(): ?string
     {
@@ -128,37 +131,34 @@ class UserResource extends Resource
     {
         $query = parent::getEloquentQuery();
     
-        if (auth()->user()->hasRole('team_admin')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-    
-            return $query
-                // Exclude super_admin users
-                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
-                // Only users in same teams
-                ->whereHas('teams', function ($query) use ($teamIds) {
-                    $query->whereIn('teams.id', $teamIds);
-                })
-                // Exclude yourself
-                ->where('users.id', '!=', auth()->id());
-        }
-    
-        if (auth()->user()->hasRole('team_member')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-    
-            return $query
-                // Exclude super_admin users
-                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
-                // Only users in same teams
-                ->whereHas('teams', function ($query) use ($teamIds) {
-                    $query->whereIn('teams.id', $teamIds);
-                });
-        }
-    
+        // Super admin can see all users
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
     
-        // For all other users, only own profile
+        // Team admin can see users in their teams except super admins
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            return $query
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                })
+                ->where('users.id', '!=', auth()->id());
+        }
+    
+        // Team members can see other users in their teams except super admins
+        if (auth()->user()->hasRole('team_member')) {
+            if (Filament::getTenant()) {
+                return $query
+                    ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                    ->whereHas('teams', function ($query) {
+                        $query->where('teams.id', Filament::getTenant()->id);
+                    });
+            }
+        }
+    
+        // Default: users can only see themselves
         return $query->where('users.id', auth()->id());
     }
 

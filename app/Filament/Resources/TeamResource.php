@@ -12,7 +12,6 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class TeamResource extends Resource
 {
@@ -37,18 +36,23 @@ class TeamResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->unique(ignorable: fn ($record) => $record),
+                Forms\Components\TextInput::make('description')
+                    ->maxLength(255)
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
             ])
             ->filters([
@@ -78,10 +82,12 @@ class TeamResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        if(auth()->user()->hasRole('super_admin')) {
+        // Super admin can see all teams
+        if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
 
+        // Team admin can see their teams and teams they created
         if (auth()->user()->hasRole('team_admin')) {
             return $query->where(function ($query) {
                 $query->whereIn('id', auth()->user()->teams->pluck('id'))
@@ -89,6 +95,7 @@ class TeamResource extends Resource
             });
         }
 
+        // Team members can only see teams they belong to
         return $query->whereHas('users', function ($query) {
             $query->where('users.id', auth()->user()->id);
         });

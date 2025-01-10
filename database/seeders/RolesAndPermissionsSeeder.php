@@ -18,6 +18,15 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Definieer ALLE permissions
         $permissions = [
+
+            // Number Range permissions
+            'view_any_number_range',
+            'view_number_range',
+            'create_number_range',
+            'update_number_range',
+            'delete_number_range',
+            'delete_any_number_range',
+
             // Team permissions
             'view_any_team',
             'view_team',
@@ -117,6 +126,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'delete_user',
             'view_team',
             'delete_team',
+            'view_any_number_range',
+            'view_number_range',
         ];
         $teamAdminRole->syncPermissions($teamAdminPermissions);
 
