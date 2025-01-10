@@ -764,6 +764,7 @@ namespace App\Policies;
 
 use App\Models\User;
 use App\Models\Team;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class TeamPolicy
@@ -815,9 +816,13 @@ class TeamPolicy
             return $user->can('delete_team');
         }
 
+        // Prevent deleting the currently active tenant
+        if ($team->id === Filament::getTenant()->id) {
+            return false;
+        }
+
         return $user->can('delete_team') 
-            && $team->created_by === $user->id 
-            && $team->users()->count() <= 1;
+            && $team->created_by === $user->id;
     }
 
     /**
@@ -1203,11 +1208,13 @@ namespace App\Filament\Resources;
 use Filament\Forms;
 use App\Models\User;
 use Filament\Tables;
+use App\Models\Team;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
+use Illuminate\Support\Str;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
 
 class UserResource extends Resource
@@ -1239,13 +1246,11 @@ class UserResource extends Resource
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create')
                             ->maxLength(255),
-                        // Alleen super_admin kan roles toewijzen
                         Forms\Components\Select::make('roles')
                             ->relationship('roles', 'name', function($query) {
                                 if(auth()->user()->hasRole('super_admin')) {
                                     return $query;
                                 }
-                                // Team admin kan alleen team_member rol toewijzen
                                 return $query->where('name', 'team_member');
                             })
                             ->multiple()
@@ -1254,22 +1259,44 @@ class UserResource extends Resource
                             ->visible(fn () => auth()->user()->hasRole(['super_admin', 'team_admin'])),
                     ])->columns(2),
                 Forms\Components\Section::make(__('Tenant'))
-                    ->description('Selecting Multi Tenancy will allow you to assign the user to a tenant.')
+                    ->description('Select an existing team or create a new one.')
                     ->schema([
-                        Forms\Components\Select::make('teams')
-                            ->label(__('Tenant'))
-                            ->relationship('teams', 'name', function($query) {
-                                if(auth()->user()->hasRole('super_admin')) {
-                                    return $query;
-                                }
-                                // Team admin ziet alleen eigen teams
-                                return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
-                            })
-                            ->multiple()
-                            ->preload()
-                            ->searchable()
-                            ->required(),
-                    ])
+                        Forms\Components\Grid::make()
+                            ->schema([
+                                Forms\Components\Select::make('teams')
+                                    ->label('Existing Teams')
+                                    ->relationship('teams', 'name', function($query) {
+                                        if(auth()->user()->hasRole('super_admin')) {
+                                            return $query;
+                                        }
+                                        return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
+                                    })
+                                    ->multiple()
+                                    ->preload()
+                                    ->searchable(),
+                                
+                                Forms\Components\Toggle::make('create_new_team')
+                                    ->label('Create New Team')
+                                    ->reactive()
+                                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                                
+                                Forms\Components\TextInput::make('new_team_name')
+                                    ->label('New Team Name')
+                                    ->visible(fn (callable $get) => $get('create_new_team'))
+                                    ->required(fn (callable $get) => $get('create_new_team'))
+                                    ->unique(Team::class, 'name')
+                                    ->rules(['required_if:create_new_team,true'])
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        $set('new_team_slug', Str::slug($state));
+                                    }),
+                                
+                                Forms\Components\TextInput::make('new_team_slug')
+                                    ->label('Team Slug')
+                                    ->visible(fn (callable $get) => $get('create_new_team'))
+                                    ->disabled()
+                                    ->dehydrated(fn (callable $get) => $get('create_new_team')),
+                            ]),
+                    ]),
             ]);
     }
 
@@ -1308,19 +1335,33 @@ class UserResource extends Resource
             $teamIds = auth()->user()->teams->pluck('id');
     
             return $query
-                // Alleen users in dezelfde teams
+                // Exclude super_admin users
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                // Only users in same teams
                 ->whereHas('teams', function ($query) use ($teamIds) {
                     $query->whereIn('teams.id', $teamIds);
                 })
-                // Exclude jezelf
+                // Exclude yourself
                 ->where('users.id', '!=', auth()->id());
+        }
+    
+        if (auth()->user()->hasRole('team_member')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+    
+            return $query
+                // Exclude super_admin users
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                // Only users in same teams
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                });
         }
     
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
     
-        // Voor alle andere users, alleen eigen profiel
+        // For all other users, only own profile
         return $query->where('users.id', auth()->id());
     }
 
@@ -1371,6 +1412,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -1412,24 +1454,20 @@ class TeamResource extends Resource
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
-                Tables\Columns\TextColumn::make('users.name')
-                    ->badge()
-                    ->label('Members')
-                    ->searchable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (Team $record) => 
-                        auth()->user()->hasRole('super_admin') || 
+                    ->visible(fn (Team $record) =>
+                        auth()->user()->hasRole('super_admin') ||
                         $record->created_by === auth()->id()
                     ),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Team $record) => 
-                        auth()->user()->hasRole('super_admin') || 
-                        ($record->created_by === auth()->id() && $record->users()->count() <= 1)
+                    ->visible(fn (Team $record) =>
+                        auth()->user()->hasRole('super_admin') ||
+                        ($record->created_by === auth()->id() && $record->id !== Filament::getTenant()->id)
                     ),
             ])
             ->bulkActions([
@@ -1643,14 +1681,14 @@ class RoleResource extends Resource implements HasShieldPermissions
 
     public static function shouldRegisterNavigation(): bool
     {
-        return auth()->user()->hasRole('super_admin');
+        return auth()->check() && auth()->user()->hasRole('super_admin');
     }
 
     public static function getNavigationGroup(): ?string
     {
-        return Utils::isResourceNavigationGroupEnabled()
+        return auth()->check() && auth()->user()->hasRole('super_admin')
             ? __('filament-shield::filament-shield.nav.group')
-            : '';
+            : null;
     }
 
     public static function getNavigationLabel(): string
@@ -1854,6 +1892,11 @@ class RoleResource extends Resource implements HasShieldPermissions
             ->gridDirection('row')
             ->columns(FilamentShieldPlugin::get()->getCheckboxListColumns())
             ->columnSpan(FilamentShieldPlugin::get()->getCheckboxListColumnSpan());
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->check() && auth()->user()->hasRole('super_admin');
     }
 }
 
@@ -2080,13 +2123,44 @@ Filament/Resources/UserResource/Pages/CreateUser.php
 
 namespace App\Filament\Resources\UserResource\Pages;
 
+use App\Models\Team;
 use App\Filament\Resources\UserResource;
-use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateUser extends CreateRecord
 {
     protected static string $resource = UserResource::class;
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        // Filter alleen de user-gerelateerde velden
+        return [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+        ];
+    }
+
+    protected function afterCreate(): void
+    {
+        $user = $this->record;
+        
+        // Koppel bestaande teams
+        if (!empty($this->data['teams'])) {
+            $user->teams()->attach($this->data['teams']);
+        }
+
+        // Maak en koppel nieuw team
+        if (!empty($this->data['create_new_team']) && !empty($this->data['new_team_name'])) {
+            $team = Team::create([
+                'name' => $this->data['new_team_name'],
+                'slug' => $this->data['new_team_slug'],
+                'created_by' => auth()->id(),
+            ]);
+            
+            $user->teams()->attach($team->id);
+        }
+    }
 
     protected function getRedirectUrl(): string
     {
@@ -2149,6 +2223,13 @@ class UsersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (Builder $query) {
+                // If not super_admin, exclude super_admin users
+                if (!auth()->user()->hasRole('super_admin')) {
+                    $query->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'));
+                }
+                return $query;
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('name'),
                 Tables\Columns\TextColumn::make('email'),
