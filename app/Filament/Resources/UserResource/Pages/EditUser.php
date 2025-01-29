@@ -7,10 +7,19 @@ use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use STS\FilamentImpersonate\Pages\Actions\Impersonate;
 
-
 class EditUser extends EditRecord
 {
     protected static string $resource = UserResource::class;
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Only save user-related fields
+        return [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => !empty($data['password']) ? $data['password'] : $this->record->password,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {

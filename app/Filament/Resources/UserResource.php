@@ -78,7 +78,8 @@ class UserResource extends Resource
                                 Forms\Components\Toggle::make('create_new_team')
                                     ->label('Create New Team')
                                     ->reactive()
-                                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                                    ->visible(fn () => auth()->user()->hasRole('super_admin'))
+                                    ->dehydrated(false), // Add this line
                                 
                                 Forms\Components\TextInput::make('new_team_name')
                                     ->label('New Team Name')
@@ -88,13 +89,14 @@ class UserResource extends Resource
                                     ->rules(['required_if:create_new_team,true'])
                                     ->afterStateUpdated(function ($state, callable $set) {
                                         $set('new_team_slug', Str::slug($state));
-                                    }),
+                                    })
+                                    ->dehydrated(false), // Add this line
                                 
                                 Forms\Components\TextInput::make('new_team_slug')
                                     ->label('Team Slug')
                                     ->visible(fn (callable $get) => $get('create_new_team'))
                                     ->disabled()
-                                    ->dehydrated(fn (callable $get) => $get('create_new_team')),
+                                    ->dehydrated(false), // Add this line
                             ]),
                     ]),
             ]);

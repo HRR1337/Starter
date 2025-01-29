@@ -295,6 +295,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Team extends Model
@@ -309,6 +310,11 @@ class Team extends Model
     public function createdBy(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function numberRanges(): HasMany
+    {
+        return $this->hasMany(NumberRange::class);
     }
 }
 
@@ -389,6 +395,39 @@ class User extends Authenticatable implements HasTenants
     {
         return $this->teams()
             ->where('team_id', Filament::getTenant()->id);
+    }
+}
+
+Models/NumberRange.php
+
+---content---
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;  // Add this import
+
+class NumberRange extends Model
+{
+    protected $fillable = [
+        'team_id',
+        'start_number',
+        'end_number',
+        'description',
+        'created_by'
+    ];
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }
 
@@ -1180,6 +1219,160 @@ class ExceptionPolicy
 }
 
 
+Filament/Resources/NumberRangeResource.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\NumberRangeResource\Pages;
+use App\Models\NumberRange;
+use Filament\Forms;
+use Filament\Forms\Form;  // Change this import
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Facades\Filament;
+use Filament\Tables\Table;  // Add this import
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+
+class NumberRangeResource extends Resource
+{
+    protected static ?string $model = NumberRange::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-hashtag';
+
+    protected static ?string $navigationGroup = 'Settings';
+
+    protected static bool $isScopedToTenant = false;
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Select::make('team_id')
+                    ->relationship('team', 'name')
+                    ->required()
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                Forms\Components\TextInput::make('start_number')
+                    ->required()
+                    ->numeric()
+                    ->minValue(1)
+                    ->disabled(fn () => !auth()->user()->hasRole('super_admin')),
+                Forms\Components\TextInput::make('end_number')
+                    ->required()
+                    ->numeric()
+                    ->minValue(1)
+                    ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
+                    ->rules([
+                        fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
+                            if ($value <= $get('start_number')) {
+                                $fail('End number must be greater than start number.');
+                                return;
+                            }
+                
+                            // Check for overlapping ranges
+                            $query = NumberRange::where(function ($query) use ($get, $value) {
+                                $query->where(function ($q) use ($get, $value) {
+                                    // Check if new range overlaps with existing ranges
+                                    $q->where(function ($inner) use ($get, $value) {
+                                        // New range starts within an existing range
+                                        $inner->where('start_number', '<=', $get('start_number'))
+                                            ->where('end_number', '>=', $get('start_number'));
+                                    })->orWhere(function ($inner) use ($get, $value) {
+                                        // New range ends within an existing range
+                                        $inner->where('start_number', '<=', $value)
+                                            ->where('end_number', '>=', $value);
+                                    })->orWhere(function ($inner) use ($get, $value) {
+                                        // New range completely contains an existing range
+                                        $inner->where('start_number', '>=', $get('start_number'))
+                                            ->where('end_number', '<=', $value);
+                                    });
+                                });
+                            });
+                
+                            // Exclude current record when editing
+                            if ($record) {
+                                $query->where('id', '!=', $record->id);
+                            }
+                
+                            if ($query->exists()) {
+                                $fail('This range overlaps with an existing range.');
+                            }
+                        },
+                    ]),
+                Forms\Components\TextInput::make('description')
+                    ->maxLength(255),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('team.name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('start_number')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('end_number')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('description')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('creator.name')
+                    ->label('Created By'),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime(),
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                ]),
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListNumberRanges::route('/'),
+            'create' => Pages\CreateNumberRange::route('/create'),
+            'edit' => Pages\EditNumberRange::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+    
+        // If not super_admin, scope to current tenant
+        if (!auth()->user()->hasRole('super_admin')) {
+            if (Filament::getTenant()) {
+                $query->where('team_id', Filament::getTenant()->id);
+            }
+        }
+    
+        return $query;
+    }
+}
+
 Filament/Resources/UserResource.php
 
 ---content---
@@ -1198,6 +1391,7 @@ use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
 use Illuminate\Support\Str;
+use Filament\Facades\Filament;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
 
 class UserResource extends Resource
@@ -1205,6 +1399,8 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-lock-closed';
+
+    protected static bool $isScopedToTenant = false;
 
     public static function getNavigationGroup(): ?string
     {
@@ -1261,7 +1457,8 @@ class UserResource extends Resource
                                 Forms\Components\Toggle::make('create_new_team')
                                     ->label('Create New Team')
                                     ->reactive()
-                                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                                    ->visible(fn () => auth()->user()->hasRole('super_admin'))
+                                    ->dehydrated(false), // Add this line
                                 
                                 Forms\Components\TextInput::make('new_team_name')
                                     ->label('New Team Name')
@@ -1271,13 +1468,14 @@ class UserResource extends Resource
                                     ->rules(['required_if:create_new_team,true'])
                                     ->afterStateUpdated(function ($state, callable $set) {
                                         $set('new_team_slug', Str::slug($state));
-                                    }),
+                                    })
+                                    ->dehydrated(false), // Add this line
                                 
                                 Forms\Components\TextInput::make('new_team_slug')
                                     ->label('Team Slug')
                                     ->visible(fn (callable $get) => $get('create_new_team'))
                                     ->disabled()
-                                    ->dehydrated(fn (callable $get) => $get('create_new_team')),
+                                    ->dehydrated(false), // Add this line
                             ]),
                     ]),
             ]);
@@ -1314,37 +1512,34 @@ class UserResource extends Resource
     {
         $query = parent::getEloquentQuery();
     
-        if (auth()->user()->hasRole('team_admin')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-    
-            return $query
-                // Exclude super_admin users
-                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
-                // Only users in same teams
-                ->whereHas('teams', function ($query) use ($teamIds) {
-                    $query->whereIn('teams.id', $teamIds);
-                })
-                // Exclude yourself
-                ->where('users.id', '!=', auth()->id());
-        }
-    
-        if (auth()->user()->hasRole('team_member')) {
-            $teamIds = auth()->user()->teams->pluck('id');
-    
-            return $query
-                // Exclude super_admin users
-                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
-                // Only users in same teams
-                ->whereHas('teams', function ($query) use ($teamIds) {
-                    $query->whereIn('teams.id', $teamIds);
-                });
-        }
-    
+        // Super admin can see all users
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
     
-        // For all other users, only own profile
+        // Team admin can see users in their teams except super admins
+        if (auth()->user()->hasRole('team_admin')) {
+            $teamIds = auth()->user()->teams->pluck('id');
+            return $query
+                ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                ->whereHas('teams', function ($query) use ($teamIds) {
+                    $query->whereIn('teams.id', $teamIds);
+                })
+                ->where('users.id', '!=', auth()->id());
+        }
+    
+        // Team members can see other users in their teams except super admins
+        if (auth()->user()->hasRole('team_member')) {
+            if (Filament::getTenant()) {
+                return $query
+                    ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                    ->whereHas('teams', function ($query) {
+                        $query->where('teams.id', Filament::getTenant()->id);
+                    });
+            }
+        }
+    
+        // Default: users can only see themselves
         return $query->where('users.id', auth()->id());
     }
 
@@ -1397,13 +1592,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class TeamResource extends Resource
 {
     protected static ?string $model = Team::class;
 
-    protected static ?string $navigationLabel = 'Tenants';
+    protected static ?string $navigationLabel = 'Teams';
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-group';
 
@@ -1422,18 +1616,23 @@ class TeamResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->unique(ignorable: fn ($record) => $record),
+                Forms\Components\TextInput::make('description')
+                    ->maxLength(255)
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->query(static::getEloquentQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')
+                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
             ])
             ->filters([
@@ -1463,10 +1662,12 @@ class TeamResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        if(auth()->user()->hasRole('super_admin')) {
+        // Super admin can see all teams
+        if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
 
+        // Team admin can see their teams and teams they created
         if (auth()->user()->hasRole('team_admin')) {
             return $query->where(function ($query) {
                 $query->whereIn('id', auth()->user()->teams->pluck('id'))
@@ -1474,6 +1675,7 @@ class TeamResource extends Resource
             });
         }
 
+        // Team members can only see teams they belong to
         return $query->whereHas('users', function ($query) {
             $query->where('users.id', auth()->user()->id);
         });
@@ -2076,10 +2278,19 @@ use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use STS\FilamentImpersonate\Pages\Actions\Impersonate;
 
-
 class EditUser extends EditRecord
 {
     protected static string $resource = UserResource::class;
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Only save user-related fields
+        return [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => !empty($data['password']) ? $data['password'] : $this->record->password,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
@@ -2094,7 +2305,6 @@ class EditUser extends EditRecord
         return $this->getResource()::getUrl('index');
     }
 }
-
 
 Filament/Resources/UserResource/Pages/CreateUser.php
 
@@ -2349,6 +2559,79 @@ class CreateTeam extends CreateRecord
     }
 }
 
+
+Filament/Resources/NumberRangeResource/Pages/ListNumberRanges.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\NumberRangeResource\Pages;
+
+use App\Filament\Resources\NumberRangeResource;
+use Filament\Actions;
+use Filament\Resources\Pages\ListRecords;
+
+class ListNumberRanges extends ListRecords
+{
+    protected static string $resource = NumberRangeResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\CreateAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/NumberRangeResource/Pages/EditNumberRange.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\NumberRangeResource\Pages;
+
+use App\Filament\Resources\NumberRangeResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+
+class EditNumberRange extends EditRecord
+{
+    protected static string $resource = NumberRangeResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+}
+
+
+Filament/Resources/NumberRangeResource/Pages/CreateNumberRange.php
+
+---content---
+
+<?php
+
+namespace App\Filament\Resources\NumberRangeResource\Pages;
+
+use App\Filament\Resources\NumberRangeResource;
+use Filament\Resources\Pages\CreateRecord;
+
+class CreateNumberRange extends CreateRecord
+{
+    protected static string $resource = NumberRangeResource::class;
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['created_by'] = auth()->id();
+
+        return $data;
+    }
+}
 
 Http/Kernel.php
 

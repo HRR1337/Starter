@@ -38,6 +38,33 @@ return new class extends Migration
 };
 
 
+migrations/2025_01_23_074805_add_description_to_teams_table.php
+
+---content---
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('teams', function (Blueprint $table) {
+            $table->string('description')->nullable()->after('slug');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('teams', function (Blueprint $table) {
+            $table->dropColumn('description');
+        });
+    }
+};
+
 migrations/2024_12_18_104859_createdby.php
 
 ---content---
@@ -110,6 +137,47 @@ return new class extends Migration
     public function down()
     {
         Schema::dropIfExists('route_statistics');
+    }
+};
+
+
+migrations/2025_01_10_085405_create_number_ranges_table.php
+
+---content---
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('number_ranges', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('start_number');
+            $table->unsignedBigInteger('end_number');
+            $table->string('description')->nullable();
+            $table->foreignId('created_by')->constrained('users');
+            $table->timestamps();
+    
+            // Add index for faster range lookups
+            $table->index(['start_number', 'end_number']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('number_ranges');
     }
 };
 
@@ -505,6 +573,15 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Definieer ALLE permissions
         $permissions = [
+
+            // Number Range permissions
+            'view_any_number_range',
+            'view_number_range',
+            'create_number_range',
+            'update_number_range',
+            'delete_number_range',
+            'delete_any_number_range',
+
             // Team permissions
             'view_any_team',
             'view_team',
@@ -604,6 +681,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'delete_user',
             'view_team',
             'delete_team',
+            'view_any_number_range',
+            'view_number_range',
         ];
         $teamAdminRole->syncPermissions($teamAdminPermissions);
 
