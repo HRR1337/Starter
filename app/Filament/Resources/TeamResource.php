@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
+use App\Rules\ValidTeamHierarchy;
 
 class TeamResource extends Resource
 {
@@ -45,7 +46,10 @@ class TeamResource extends Resource
                             ->relationship('parent', 'name')
                             ->searchable()
                             ->preload()
-                            ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                            ->visible(fn () => auth()->user()->hasRole('super_admin'))
+                            ->rules([
+                                fn ($get) => new ValidTeamHierarchy($get('id')),
+                            ]),
                         Forms\Components\Select::make('type')
                             ->label('Team Type')
                             ->options([

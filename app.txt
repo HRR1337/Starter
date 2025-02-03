@@ -71,6 +71,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         Exception::class => ExceptionPolicy::class,
+        \App\Models\NumberRange::class => \App\Policies\NumberRangePolicy::class,
     ];
 
     /**
@@ -316,31 +317,14 @@ class Team extends Model
         'is_active' => 'boolean',
     ];
 
-    // Add boot method for validation
+    // Add boot method for setting the level
     protected static function boot()
     {
         parent::boot();
 
         static::saving(function ($team) {
             if ($team->parent_id) {
-                // Check if team is trying to be its own parent
-                if ($team->exists && $team->id == $team->parent_id) {
-                    throw new \Exception('A team cannot be its own parent.');
-                }
-
-                // Only check descendants for existing teams
-                if ($team->exists) {
-                    // Get all descendants
-                    $descendants = collect();
-                    $team->getDescendants($team->id, $descendants);
-
-                    // Check if the new parent is not one of the team's descendants
-                    if ($descendants->contains($team->parent_id)) {
-                        throw new \Exception('Cannot set a descendant as parent.');
-                    }
-                }
-
-                // Update the level based on parent's level
+                // Update the level based on the parent's level
                 $parentTeam = Team::find($team->parent_id);
                 $team->level = $parentTeam ? $parentTeam->level + 1 : 0;
             } else {
@@ -826,6 +810,64 @@ class RolePolicy
     }
 }
 
+
+Policies/NumberRangePolicy.php
+
+---content---
+
+<?php
+
+namespace App\Policies;
+
+use App\Models\User;
+use App\Models\NumberRange;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class NumberRangePolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can create a number range.
+     */
+    public function create(User $user): bool
+    {
+        return $user->hasRole('super_admin'); // Alleen super_admin mag aanmaken
+    }
+
+    /**
+     * Determine whether the user can update the number range.
+     */
+    public function update(User $user, NumberRange $numberRange): bool
+    {
+        // Super admin mag alles
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+    
+        // Haal alle teams op waar de user team_admin van is (inclusief subteams)
+        $userTeamIds = $user->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+    
+        // Controleer of de NumberRange binnen deze teams valt
+        return $user->hasRole('team_admin') && $userTeamIds->contains($numberRange->team_id);
+    }
+
+    /**
+     * Determine whether the user can delete the number range.
+     */public function delete(User $user, NumberRange $numberRange): bool
+{
+    // Super admin mag alles
+    if ($user->hasRole('super_admin')) {
+        return true;
+    }
+
+    // Haal alle teams op waar de user team_admin van is (inclusief subteams)
+    $userTeamIds = $user->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+
+    // Controleer of de NumberRange binnen deze teams valt
+    return $user->hasRole('team_admin') && $userTeamIds->contains($numberRange->team_id);
+}
+}
 
 Policies/UserPolicy.php
 
@@ -1456,7 +1498,8 @@ class NumberRangeResource extends Resource
                 Forms\Components\Select::make('team_id')
                     ->relationship('team', 'name')
                     ->required()
-                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                    ->visible(fn () => auth()->user()->can('create', NumberRange::class))
+                    ->disabled(fn () => auth()->user()->hasRole('team_admin')),
 
                 Forms\Components\Grid::make()
                     ->schema([
@@ -1548,12 +1591,6 @@ class NumberRangeResource extends Resource
                     ->label('End Number')
                     ->formatStateUsing(fn ($record) => number_format($record->end_number))
                     ->sortable(),
-                Tables\Columns\TextColumn::make('range_start')
-                    ->label('Range Start')
-                    ->formatStateUsing(fn ($record) => $record->range_start),
-                Tables\Columns\TextColumn::make('range_end')
-                    ->label('Range End')
-                    ->formatStateUsing(fn ($record) => $record->range_end),
                 Tables\Columns\TextColumn::make('description')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('creator.name')
@@ -1561,19 +1598,17 @@ class NumberRangeResource extends Resource
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime(),
             ])
-            ->filters([
-                //
-            ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                    ->visible(fn (NumberRange $record) => auth()->user()->can('update', $record)),
+    
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                    ->visible(fn (NumberRange $record) => auth()->user()->can('delete', $record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')), // Alleen super_admin kan bulk delete
                 ]),
             ]);
     }
@@ -1598,13 +1633,16 @@ class NumberRangeResource extends Resource
     {
         $query = parent::getEloquentQuery();
     
-        if (!auth()->user()->hasRole('super_admin')) {
-            if (Filament::getTenant()) {
-                $query->where('team_id', Filament::getTenant()->id);
-            }
+        // Super admin mag alles zien
+        if (auth()->user()->hasRole('super_admin')) {
+            return $query;
         }
     
-        return $query;
+        // Haal alle teams op waar de user team_admin van is (inclusief subteams)
+        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+    
+        // Filter de query zodat alleen de NumberRanges van deze teams zichtbaar zijn
+        return $query->whereIn('team_id', $userTeamIds);
     }
 }
 
@@ -1828,6 +1866,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
+use App\Rules\ValidTeamHierarchy;
 
 class TeamResource extends Resource
 {
@@ -1861,7 +1900,10 @@ class TeamResource extends Resource
                             ->relationship('parent', 'name')
                             ->searchable()
                             ->preload()
-                            ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                            ->visible(fn () => auth()->user()->hasRole('super_admin'))
+                            ->rules([
+                                fn ($get) => new ValidTeamHierarchy($get('id')),
+                            ]),
                         Forms\Components\Select::make('type')
                             ->label('Team Type')
                             ->options([
@@ -2888,6 +2930,7 @@ Filament/Resources/NumberRangeResource/Pages/CreateNumberRange.php
 namespace App\Filament\Resources\NumberRangeResource\Pages;
 
 use App\Filament\Resources\NumberRangeResource;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateNumberRange extends CreateRecord
@@ -2897,7 +2940,12 @@ class CreateNumberRange extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['created_by'] = auth()->id();
-
+        
+        // Team admin mag alleen NumberRanges maken voor zijn eigen team
+        if (auth()->user()->hasRole('team_admin')) {
+            $data['team_id'] = Filament::getTenant()?->id ?? auth()->user()->teams->first()->id;
+        }
+    
         return $data;
     }
 }
@@ -3425,6 +3473,58 @@ class Controller extends BaseController
     use AuthorizesRequests, ValidatesRequests;
 }
 
+
+Rules/ValidTeamHierarchy.php
+
+---content---
+
+<?php
+
+namespace App\Rules;
+
+use App\Models\Team;
+use Closure;
+use Illuminate\Contracts\Validation\ValidationRule;
+
+class ValidTeamHierarchy implements ValidationRule
+{
+    protected $teamId;
+
+    public function __construct($teamId = null)
+    {
+        $this->teamId = $teamId;
+    }
+
+    /**
+     * Run the validation rule.
+     *
+     * @param  \Closure(string): \Illuminate\Translation\PotentiallyTranslatedString  $fail
+     */
+    public function validate(string $attribute, mixed $value, Closure $fail): void
+    {
+        // Skip validation if no parent_id is provided
+        if (is_null($value)) {
+            return;
+        }
+
+        // Prevent a team from being its own parent
+        if ($this->teamId && $value == $this->teamId) {
+            $fail('A team cannot be its own parent.');
+            return;
+        }
+
+        // Prevent setting a descendant as the parent
+        $team = Team::find($this->teamId);
+        if ($team) {
+            $descendants = collect();
+            $team->getDescendants($team->id, $descendants);
+
+            if ($descendants->contains($value)) {
+                $fail('Cannot set a descendant as parent.');
+            }
+        }
+    }
+}
 
 Console/Kernel.php
 

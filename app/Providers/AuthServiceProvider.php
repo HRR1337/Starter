@@ -16,6 +16,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         Exception::class => ExceptionPolicy::class,
+        \App\Models\NumberRange::class => \App\Policies\NumberRangePolicy::class,
     ];
 
     /**

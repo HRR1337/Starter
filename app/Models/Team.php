@@ -25,31 +25,14 @@ class Team extends Model
         'is_active' => 'boolean',
     ];
 
-    // Add boot method for validation
+    // Add boot method for setting the level
     protected static function boot()
     {
         parent::boot();
 
         static::saving(function ($team) {
             if ($team->parent_id) {
-                // Check if team is trying to be its own parent
-                if ($team->exists && $team->id == $team->parent_id) {
-                    throw new \Exception('A team cannot be its own parent.');
-                }
-
-                // Only check descendants for existing teams
-                if ($team->exists) {
-                    // Get all descendants
-                    $descendants = collect();
-                    $team->getDescendants($team->id, $descendants);
-
-                    // Check if the new parent is not one of the team's descendants
-                    if ($descendants->contains($team->parent_id)) {
-                        throw new \Exception('Cannot set a descendant as parent.');
-                    }
-                }
-
-                // Update the level based on parent's level
+                // Update the level based on the parent's level
                 $parentTeam = Team::find($team->parent_id);
                 $team->level = $parentTeam ? $parentTeam->level + 1 : 0;
             } else {
