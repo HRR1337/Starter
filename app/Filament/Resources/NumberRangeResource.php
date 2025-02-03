@@ -5,11 +5,11 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\NumberRangeResource\Pages;
 use App\Models\NumberRange;
 use Filament\Forms;
-use Filament\Forms\Form;  // Change this import
+use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Facades\Filament;
-use Filament\Tables\Table;  // Add this import
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -31,55 +31,80 @@ class NumberRangeResource extends Resource
                     ->relationship('team', 'name')
                     ->required()
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
-                Forms\Components\TextInput::make('start_number')
-                    ->required()
-                    ->numeric()
-                    ->minValue(1)
-                    ->disabled(fn () => !auth()->user()->hasRole('super_admin')),
-                Forms\Components\TextInput::make('end_number')
-                    ->required()
-                    ->numeric()
-                    ->minValue(1)
-                    ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                    ->rules([
-                        fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
-                            if ($value <= $get('start_number')) {
-                                $fail('End number must be greater than start number.');
-                                return;
-                            }
-                
-                            // Check for overlapping ranges
-                            $query = NumberRange::where(function ($query) use ($get, $value) {
-                                $query->where(function ($q) use ($get, $value) {
-                                    // Check if new range overlaps with existing ranges
-                                    $q->where(function ($inner) use ($get, $value) {
-                                        // New range starts within an existing range
-                                        $inner->where('start_number', '<=', $get('start_number'))
-                                            ->where('end_number', '>=', $get('start_number'));
-                                    })->orWhere(function ($inner) use ($get, $value) {
-                                        // New range ends within an existing range
-                                        $inner->where('start_number', '<=', $value)
-                                            ->where('end_number', '>=', $value);
-                                    })->orWhere(function ($inner) use ($get, $value) {
-                                        // New range completely contains an existing range
-                                        $inner->where('start_number', '>=', $get('start_number'))
-                                            ->where('end_number', '<=', $value);
+
+                Forms\Components\Grid::make()
+                    ->schema([
+                        Forms\Components\TextInput::make('range_start')
+                            ->label('Start Range')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(1)
+                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
+                            ->hint('Example: 0 means 1-1000, 1 means 1001-2000')
+                            ->helperText('Enter the starting range number'),
+
+                        Forms\Components\TextInput::make('range_end')
+                            ->label('End Range')
+                            ->required()
+                            ->numeric()
+                            ->minValue(1)
+                            ->step(1)
+                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
+                            ->hint('Example: 1 means 1000, 2 means 2000')
+                            ->helperText('Enter the ending range number')
+                            ->rules([
+                                fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
+                                    if ($value <= $get('range_start')) {
+                                        $fail('End range must be greater than start range.');
+                                        return;
+                                    }
+
+                                    // Convert range numbers to actual numbers for overlap checking
+                                    $startNumber = ($get('range_start') * 1000) + 1;
+                                    $endNumber = $value * 1000;
+
+                                    // Check for overlapping ranges
+                                    $query = NumberRange::where(function ($query) use ($startNumber, $endNumber) {
+                                        $query->where(function ($q) use ($startNumber, $endNumber) {
+                                            $q->where(function ($inner) use ($startNumber) {
+                                                $inner->where('start_number', '<=', $startNumber)
+                                                    ->where('end_number', '>=', $startNumber);
+                                            })->orWhere(function ($inner) use ($endNumber) {
+                                                $inner->where('start_number', '<=', $endNumber)
+                                                    ->where('end_number', '>=', $endNumber);
+                                            })->orWhere(function ($inner) use ($startNumber, $endNumber) {
+                                                $inner->where('start_number', '>=', $startNumber)
+                                                    ->where('end_number', '<=', $endNumber);
+                                            });
+                                        });
                                     });
-                                });
-                            });
-                
-                            // Exclude current record when editing
-                            if ($record) {
-                                $query->where('id', '!=', $record->id);
-                            }
-                
-                            if ($query->exists()) {
-                                $fail('This range overlaps with an existing range.');
-                            }
-                        },
-                    ]),
+
+                                    // Exclude current record when editing
+                                    if ($record) {
+                                        $query->where('id', '!=', $record->id);
+                                    }
+
+                                    if ($query->exists()) {
+                                        $fail('This range overlaps with an existing range.');
+                                    }
+                                },
+                            ]),
+                    ])->columns(2),
+
                 Forms\Components\TextInput::make('description')
                     ->maxLength(255),
+
+                Forms\Components\Placeholder::make('actual_range')
+                    ->label('Actual Number Range')
+                    ->content(function ($get) {
+                        if ($get('range_start') !== null && $get('range_end') !== null) {
+                            $start = ($get('range_start') * 1000) + 1;
+                            $end = $get('range_end') * 1000;
+                            return number_format($start) . ' - ' . number_format($end);
+                        }
+                        return 'Enter range values to see actual numbers';
+                    }),
             ]);
     }
 
@@ -90,9 +115,19 @@ class NumberRangeResource extends Resource
                 Tables\Columns\TextColumn::make('team.name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('start_number')
+                    ->label('Start Number')
+                    ->formatStateUsing(fn ($record) => number_format($record->start_number))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('end_number')
+                    ->label('End Number')
+                    ->formatStateUsing(fn ($record) => number_format($record->end_number))
                     ->sortable(),
+                Tables\Columns\TextColumn::make('range_start')
+                    ->label('Range Start')
+                    ->formatStateUsing(fn ($record) => $record->range_start),
+                Tables\Columns\TextColumn::make('range_end')
+                    ->label('Range End')
+                    ->formatStateUsing(fn ($record) => $record->range_end),
                 Tables\Columns\TextColumn::make('description')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('creator.name')
@@ -137,7 +172,6 @@ class NumberRangeResource extends Resource
     {
         $query = parent::getEloquentQuery();
     
-        // If not super_admin, scope to current tenant
         if (!auth()->user()->hasRole('super_admin')) {
             if (Filament::getTenant()) {
                 $query->where('team_id', Filament::getTenant()->id);

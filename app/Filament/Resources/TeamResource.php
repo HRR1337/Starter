@@ -32,13 +32,34 @@ class TeamResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignorable: fn ($record) => $record),
-                Forms\Components\TextInput::make('description')
-                    ->maxLength(255)
-                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                Forms\Components\Section::make('Team Details')
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(ignorable: fn ($record) => $record),
+                        Forms\Components\TextInput::make('description')
+                            ->maxLength(255),
+                        Forms\Components\Select::make('parent_id')
+                            ->label('Parent Team')
+                            ->relationship('parent', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                        Forms\Components\Select::make('type')
+                            ->label('Team Type')
+                            ->options([
+                                'department' => 'Department',
+                                'division' => 'Division',
+                                'team' => 'Team',
+                                'unit' => 'Unit',
+                            ])
+                            ->default('team')
+                            ->required(),
+                        Forms\Components\Toggle::make('is_active')
+                            ->label('Active')
+                            ->default(true),
+                    ])->columns(2),
             ]);
     }
 
@@ -48,15 +69,27 @@ class TeamResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('full_hierarchy')
+                    ->label('Hierarchy')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->badge(),
+                Tables\Columns\IconColumn::make('is_active')
+                    ->boolean(),
                 Tables\Columns\TextColumn::make('createdBy.name')
                     ->label('Created By')
                     ->visible(fn () => auth()->user()->hasRole('super_admin')),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->visible(fn () => auth()->user()->hasRole('super_admin')),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('type')
+                    ->options([
+                        'department' => 'Department',
+                        'division' => 'Division',
+                        'team' => 'Team',
+                        'unit' => 'Unit',
+                    ]),
+                Tables\Filters\TernaryFilter::make('is_active')
+                    ->label('Active'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
