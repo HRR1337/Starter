@@ -43,7 +43,7 @@ class Team extends Model
     }
 
     // Helper method to get all descendants
-    private function getDescendants($teamId, &$descendants)
+    public function getDescendants($teamId, &$descendants)
     {
         $childTeams = Team::where('parent_id', $teamId)->get();
         

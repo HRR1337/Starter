@@ -15,7 +15,7 @@ class NumberRangePolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasRole('super_admin'); // Alleen super_admin mag aanmaken
+        return $user->hasRole(['super_admin', 'team_admin']); // Allow both super_admin and team_admin
     }
 
     /**
@@ -37,17 +37,18 @@ class NumberRangePolicy
 
     /**
      * Determine whether the user can delete the number range.
-     */public function delete(User $user, NumberRange $numberRange): bool
-{
-    // Super admin mag alles
-    if ($user->hasRole('super_admin')) {
-        return true;
+     */
+    public function delete(User $user, NumberRange $numberRange): bool
+    {
+        // Super admin mag alles
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+
+        // Haal alle teams op waar de user team_admin van is (inclusief subteams)
+        $userTeamIds = $user->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+
+        // Controleer of de NumberRange binnen deze teams valt
+        return $user->hasRole('team_admin') && $userTeamIds->contains($numberRange->team_id);
     }
-
-    // Haal alle teams op waar de user team_admin van is (inclusief subteams)
-    $userTeamIds = $user->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
-
-    // Controleer of de NumberRange binnen deze teams valt
-    return $user->hasRole('team_admin') && $userTeamIds->contains($numberRange->team_id);
-}
 }

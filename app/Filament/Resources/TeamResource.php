@@ -31,6 +31,9 @@ class TeamResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $user = auth()->user();
+        $currentTeam = Filament::getTenant();
+    
         return $form
             ->schema([
                 Forms\Components\Section::make('Team Details')
@@ -43,10 +46,19 @@ class TeamResource extends Resource
                             ->maxLength(255),
                         Forms\Components\Select::make('parent_id')
                             ->label('Parent Team')
-                            ->relationship('parent', 'name')
+                            ->relationship('parent', 'name', function ($query) use ($user) {
+                                // Voor team_admin, alleen teams waar ze lid van zijn
+                                if ($user->hasRole('team_admin')) {
+                                    return $query->whereIn('id', $user->teams->pluck('id'));
+                                }
+                                return $query;
+                            })
                             ->searchable()
                             ->preload()
-                            ->visible(fn () => auth()->user()->hasRole('super_admin'))
+                            ->default(fn () => $user->hasRole('team_admin') ? $currentTeam?->id : null)
+                            ->required(fn () => $user->hasRole('team_admin'))
+                            ->disabled(fn () => $user->hasRole('team_admin') && $user->teams->count() === 1)
+                            ->visible(fn () => $user->hasRole(['super_admin', 'team_admin']))
                             ->rules([
                                 fn ($get) => new ValidTeamHierarchy($get('id')),
                             ]),
@@ -141,6 +153,7 @@ class TeamResource extends Resource
     public static function getRelations(): array
     {
         return [
+            RelationManagers\NumberRangesRelationManager::class,
             RelationManagers\UsersRelationManager::class,
         ];
     }

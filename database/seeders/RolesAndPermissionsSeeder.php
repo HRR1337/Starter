@@ -141,7 +141,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Create Super Admin account
         $superAdmin = User::create([
-            'name' => 'Super Admin',
+            'name' => 'Biblefactory Admin',
             'email' => 'hrr@hrr.nu',
             'password' => Hash::make('password'),
         ]);
@@ -162,10 +162,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'created_by' => $teamAdmin->id, // Team1 aangemaakt door Team Admin
         ]);
 
-        $teamBds = Team::create([
-            'name' => 'bds',
-            'slug' => 'bds',
-            'created_by' => $superAdmin->id, // BDS aangemaakt door Super Admin
+        $teamBiblefactory = Team::create([
+            'name' => 'Biblefactory',
+            'slug' => 'biblefactory',
+            'created_by' => $superAdmin->id, // Biblefactory aangemaakt door Super Admin
         ]);
 
         // Assign Team Admin to team
@@ -183,6 +183,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $team1->users()->attach($teamMember);
 
         // Assign Super Admin to all teams
-        $superAdmin->teams()->attach([$team1->id, $teamBds->id]);
+        $superAdmin->teams()->attach([$team1->id, $teamBiblefactory->id]);
     }
 }

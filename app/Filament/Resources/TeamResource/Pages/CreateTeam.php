@@ -7,6 +7,7 @@ use App\Models\User;
 use Filament\Actions;
 use App\Traits\GenerateSlug;
 use App\Filament\Resources\TeamResource;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateTeam extends CreateRecord
@@ -17,9 +18,23 @@ class CreateTeam extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $user = auth()->user();
+        $currentTeam = Filament::getTenant();
+    
         $data['slug'] = $this->generateSlug($data['name'], 'teams');
         $data['created_by'] = auth()->id();
-
+    
+        // Als het een team_admin is en er is nog geen parent_id ingesteld
+        if ($user->hasRole('team_admin') && !isset($data['parent_id'])) {
+            // Als de admin maar één team heeft, gebruik dat als parent
+            if ($user->teams->count() === 1) {
+                $data['parent_id'] = $user->teams->first()->id;
+            } else {
+                // Anders gebruik het huidige team als parent
+                $data['parent_id'] = $currentTeam->id;
+            }
+        }
+    
         return $data;
     }
 

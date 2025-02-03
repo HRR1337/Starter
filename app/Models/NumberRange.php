@@ -12,7 +12,7 @@ class NumberRange extends Model
         'start_number',
         'end_number',
         'description',
-        'created_by'
+        'created_by',
     ];
 
     protected $appends = ['range_start', 'range_end'];

@@ -1529,33 +1529,78 @@ class NumberRangeResource extends Resource
                                         return;
                                     }
 
-                                    // Convert range numbers to actual numbers for overlap checking
+                                    // Convert range numbers naar daadwerkelijke getallen
                                     $startNumber = ($get('range_start') * 1000) + 1;
                                     $endNumber = $value * 1000;
 
-                                    // Check for overlapping ranges
-                                    $query = NumberRange::where(function ($query) use ($startNumber, $endNumber) {
-                                        $query->where(function ($q) use ($startNumber, $endNumber) {
-                                            $q->where(function ($inner) use ($startNumber) {
-                                                $inner->where('start_number', '<=', $startNumber)
-                                                    ->where('end_number', '>=', $startNumber);
-                                            })->orWhere(function ($inner) use ($endNumber) {
-                                                $inner->where('start_number', '<=', $endNumber)
-                                                    ->where('end_number', '>=', $endNumber);
-                                            })->orWhere(function ($inner) use ($startNumber, $endNumber) {
-                                                $inner->where('start_number', '>=', $startNumber)
-                                                    ->where('end_number', '<=', $endNumber);
+                                    if (auth()->user()->hasRole('super_admin')) {
+                                        // Super admins mogen elke range instellen, maar ze mogen niet overlappen
+                                        $query = NumberRange::where(function ($query) use ($startNumber, $endNumber) {
+                                            $query->where(function ($q) use ($startNumber, $endNumber) {
+                                                $q->where(function ($inner) use ($startNumber) {
+                                                    $inner->where('start_number', '<=', $startNumber)
+                                                          ->where('end_number', '>=', $startNumber);
+                                                })->orWhere(function ($inner) use ($endNumber) {
+                                                    $inner->where('start_number', '<=', $endNumber)
+                                                          ->where('end_number', '>=', $endNumber);
+                                                })->orWhere(function ($inner) use ($startNumber, $endNumber) {
+                                                    $inner->where('start_number', '>=', $startNumber)
+                                                          ->where('end_number', '<=', $endNumber);
+                                                });
                                             });
                                         });
-                                    });
 
-                                    // Exclude current record when editing
-                                    if ($record) {
-                                        $query->where('id', '!=', $record->id);
+                                        if ($record) {
+                                            $query->where('id', '!=', $record->id);
+                                        }
+
+                                        if ($query->exists()) {
+                                            $fail('This range overlaps with an existing range.');
+                                        }
+                                        return;
                                     }
 
-                                    if ($query->exists()) {
-                                        $fail('This range overlaps with an existing range.');
+                                    // Team admins mogen alleen sub-ranges instellen binnen een super_admin range
+                                    if (auth()->user()->hasRole('team_admin')) {
+                                        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+
+                                        // Haal alle super_admin-ranges op
+                                        $originalRanges = NumberRange::whereNull('created_by') // Alleen super_admin ranges
+                                            ->get(['start_number', 'end_number']);
+
+                                        $isWithinSuperAdminRange = $originalRanges->contains(function ($range) use ($startNumber, $endNumber) {
+                                            return $range->start_number <= $startNumber && $range->end_number >= $endNumber;
+                                        });
+
+                                        if (!$isWithinSuperAdminRange) {
+                                            $fail('Your range must be within an original super_admin range.');
+                                            return;
+                                        }
+
+                                        // Controleer of de nieuwe range overlapt met een bestaand sub-team range
+                                        $query = NumberRange::whereIn('team_id', $userTeamIds)
+                                            ->where(function ($query) use ($startNumber, $endNumber) {
+                                                $query->where(function ($q) use ($startNumber, $endNumber) {
+                                                    $q->where(function ($inner) use ($startNumber) {
+                                                        $inner->where('start_number', '<=', $startNumber)
+                                                              ->where('end_number', '>=', $startNumber);
+                                                    })->orWhere(function ($inner) use ($endNumber) {
+                                                        $inner->where('start_number', '<=', $endNumber)
+                                                              ->where('end_number', '>=', $endNumber);
+                                                    })->orWhere(function ($inner) use ($startNumber, $endNumber) {
+                                                        $inner->where('start_number', '>=', $startNumber)
+                                                              ->where('end_number', '<=', $endNumber);
+                                                    });
+                                                });
+                                            });
+
+                                        if ($record) {
+                                            $query->where('id', '!=', $record->id);
+                                        }
+
+                                        if ($query->exists()) {
+                                            $fail('This range overlaps with an existing sub-team range.');
+                                        }
                                     }
                                 },
                             ]),
@@ -1608,7 +1653,7 @@ class NumberRangeResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()->hasRole('super_admin')), // Alleen super_admin kan bulk delete
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
     }
@@ -1632,16 +1677,13 @@ class NumberRangeResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-    
-        // Super admin mag alles zien
+
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
-    
-        // Haal alle teams op waar de user team_admin van is (inclusief subteams)
+
         $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
-    
-        // Filter de query zodat alleen de NumberRanges van deze teams zichtbaar zijn
+
         return $query->whereIn('team_id', $userTeamIds);
     }
 }
