@@ -36,24 +36,22 @@ class NumberRangeResource extends Resource
                 Forms\Components\Grid::make()
                     ->schema([
                         Forms\Components\TextInput::make('range_start')
-                            ->label('Start Range')
+                            ->label('Box start')
                             ->required()
                             ->numeric()
                             ->minValue(0)
                             ->step(1)
                             ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->hint('Example: 0 means 1-1000, 1 means 1001-2000')
-                            ->helperText('Enter the starting range number'),
+                            ->helperText('Enter the starting box number'),
 
                         Forms\Components\TextInput::make('range_end')
-                            ->label('End Range')
+                            ->label('Box end')
                             ->required()
                             ->numeric()
                             ->minValue(1)
                             ->step(1)
                             ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->hint('Example: 1 means 1000, 2 means 2000')
-                            ->helperText('Enter the ending range number')
+                            ->helperText('Enter the ending box number')
                             ->rules([
                                 fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
                                     if ($value <= $get('range_start')) {
@@ -160,6 +158,11 @@ class NumberRangeResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('team.name')
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('range_start')
+                    ->label('Box Start'),
+                Tables\Columns\TextColumn::make('range_end')
+                    ->label('Box End'),
                 Tables\Columns\TextColumn::make('start_number')
                     ->label('Start Number')
                     ->formatStateUsing(fn ($record) => number_format($record->start_number))
@@ -168,8 +171,8 @@ class NumberRangeResource extends Resource
                     ->label('End Number')
                     ->formatStateUsing(fn ($record) => number_format($record->end_number))
                     ->sortable(),
-                Tables\Columns\TextColumn::make('description')
-                    ->searchable(),
+               // Tables\Columns\TextColumn::make('description')
+                //    ->searchable(),
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Created By'),
                 Tables\Columns\TextColumn::make('created_at')

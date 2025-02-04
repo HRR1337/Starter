@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class Team extends Model
 {
@@ -25,86 +27,76 @@ class Team extends Model
         'is_active' => 'boolean',
     ];
 
-    // Add boot method for setting the level
+    /**
+     * Boot method for setting hierarchy level automatically.
+     */
     protected static function boot()
     {
         parent::boot();
 
         static::saving(function ($team) {
-            if ($team->parent_id) {
-                // Update the level based on the parent's level
-                $parentTeam = Team::find($team->parent_id);
-                $team->level = $parentTeam ? $parentTeam->level + 1 : 0;
-            } else {
-                // Root level team
-                $team->level = 0;
-            }
+            $team->level = $team->parent ? $team->parent->level + 1 : 0;
         });
     }
 
-    // Helper method to get all descendants
-    public function getDescendants($teamId, &$descendants)
-    {
-        $childTeams = Team::where('parent_id', $teamId)->get();
-        
-        foreach ($childTeams as $child) {
-            $descendants->push($child->id);
-            $this->getDescendants($child->id, $descendants);
-        }
-    }
-
-    // Existing relationships
-    public function users(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class)->withTimestamps();
-    }
-
-    public function createdBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function numberRanges(): HasMany
-    {
-        return $this->hasMany(NumberRange::class);
-    }
-
-    // Hierarchy relationships
+    /**
+     * Get direct parent of the team.
+     */
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Team::class, 'parent_id');
     }
 
+    /**
+     * Get direct children of the team.
+     */
     public function children(): HasMany
     {
-        return $this->hasMany(Team::class, 'parent_id');
+        return $this->hasMany(Team::class, 'parent_id')->with('children');
     }
 
-    // Helper methods for hierarchy
-    public function allChildren()
+    /**
+     * Get all descendants recursively.
+     */
+    public function descendants(): HasMany
     {
-        return $this->children()->with('children');
+        return $this->hasMany(Team::class, 'parent_id')->with('descendants');
     }
 
+    /**
+     * Get all ancestors recursively.
+     */
     public function ancestors()
     {
-        return $this->parent()->with('parent');
+        return $this->parent()->with('ancestors');
     }
 
-    // Get all descendants as a flat collection
-    public function getAllDescendants(): \Illuminate\Support\Collection
+    /**
+     * Get all descendants as a flat collection using a Recursive CTE.
+     */
+    public function getAllDescendants(): Collection
     {
-        $descendants = collect();
-        $this->getDescendants($this->id, $descendants);
-        return $descendants;
+        $results = DB::select("
+            WITH RECURSIVE team_tree AS (
+                SELECT id, parent_id FROM teams WHERE id = ?
+                UNION ALL
+                SELECT t.id, t.parent_id FROM teams t
+                INNER JOIN team_tree tt ON t.parent_id = tt.id
+            )
+            SELECT * FROM team_tree WHERE id != ?
+        ", [$this->id, $this->id]);
+    
+        return collect($results); 
     }
 
-    // Get all ancestors as a collection
-    public function getAllAncestors(): \Illuminate\Support\Collection
+    /**
+     * Get all ancestors as a flat collection.
+     */
+    public function getAllAncestors(): Collection
     {
         $ancestors = collect();
         $parent = $this->parent;
-        
+
         while ($parent) {
             $ancestors->push($parent);
             $parent = $parent->parent;
@@ -113,33 +105,49 @@ class Team extends Model
         return $ancestors;
     }
 
-    // Scopes
+    /**
+     * Scope to only active teams.
+     */
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true);
     }
 
+    /**
+     * Scope to only root-level teams.
+     */
     public function scopeRootLevel(Builder $query): void
     {
         $query->whereNull('parent_id');
     }
 
+    /**
+     * Scope teams by type.
+     */
     public function scopeOfType(Builder $query, string $type): void
     {
         $query->where('type', $type);
     }
 
-    // Helper methods
+    /**
+     * Check if this team is a root team.
+     */
     public function isRoot(): bool
     {
         return is_null($this->parent_id);
     }
 
+    /**
+     * Check if this team has children.
+     */
     public function hasChildren(): bool
     {
-        return $this->children()->count() > 0;
+        return $this->children()->exists();
     }
 
+    /**
+     * Get full hierarchy string (e.g., "Company > Division > Department").
+     */
     public function getFullHierarchyAttribute(): string
     {
         $hierarchy = collect([$this->name]);
@@ -153,36 +161,51 @@ class Team extends Model
         return $hierarchy->join(' > ');
     }
 
-    // Get the depth level in the hierarchy
+    /**
+     * Get the depth level in the hierarchy.
+     */
     public function getDepthLevel(): int
     {
         return $this->level;
     }
 
-    // Check if this team is a descendant of another team
+    /**
+     * Check if this team is a descendant of another team.
+     */
     public function isDescendantOf(Team $team): bool
     {
         return $this->getAllAncestors()->contains($team);
     }
 
-    // Check if this team is an ancestor of another team
+    /**
+     * Check if this team is an ancestor of another team.
+     */
     public function isAncestorOf(Team $team): bool
     {
         return $team->getAllAncestors()->contains($this);
     }
 
-    // Get siblings (other teams with the same parent)
-    public function getSiblings()
+    /**
+     * Get siblings (other teams with the same parent).
+     */
+    public function getSiblings(): Collection
     {
         return Team::where('parent_id', $this->parent_id)
             ->where('id', '!=', $this->id)
             ->get();
     }
 
-    // Move team to a new parent
+    /**
+     * Move team to a new parent.
+     */
     public function moveTo(?Team $newParent = null)
     {
         $this->parent_id = $newParent ? $newParent->id : null;
-        $this->save(); // This will trigger the validation in boot()
+        $this->save();
     }
+
+    public function users(): BelongsToMany
+{
+    return $this->belongsToMany(User::class)->withTimestamps();
+}
 }
