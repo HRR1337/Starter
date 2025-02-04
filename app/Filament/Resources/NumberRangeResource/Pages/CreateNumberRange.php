@@ -5,6 +5,7 @@ namespace App\Filament\Resources\NumberRangeResource\Pages;
 use App\Filament\Resources\NumberRangeResource;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\CreateRecord;
+use App\Services\NumberRangeService;
 
 class CreateNumberRange extends CreateRecord
 {
@@ -12,13 +13,6 @@ class CreateNumberRange extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['created_by'] = auth()->id();
-        
-        // Team admin mag alleen NumberRanges maken voor zijn eigen team
-        if (auth()->user()->hasRole('team_admin')) {
-            $data['team_id'] = Filament::getTenant()?->id ?? auth()->user()->teams->first()->id;
-        }
-    
-        return $data;
+        return app(NumberRangeService::class)->create($data)->toArray();
     }
 }

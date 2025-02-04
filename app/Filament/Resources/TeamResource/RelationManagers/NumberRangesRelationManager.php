@@ -8,6 +8,7 @@ use Filament\Forms\Form;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Log;
 use Filament\Resources\RelationManagers\RelationManager;
+use App\Services\NumberRangeService;
 
 class NumberRangesRelationManager extends RelationManager
 {
@@ -18,133 +19,27 @@ class NumberRangesRelationManager extends RelationManager
     protected static ?string $recordTitleAttribute = 'description';
 
     public function form(Form $form): Form
-    {
-        $user = auth()->user();
-        $parentTeamRanges = null;
+{
+    return $form
+        ->schema([
+            Forms\Components\TextInput::make('range_start')
+                ->label('Start Range')
+                ->required()
+                ->numeric()
+                ->minValue(0)
+                ->step(1),
 
-        // If team_admin, get parent team's ranges
-        if ($user->hasRole('team_admin')) {
-            $parentTeam = $this->getOwnerRecord()->parent;
-            if ($parentTeam) {
-                $parentTeamRanges = $parentTeam->numberRanges;
-            }
-        }
+            Forms\Components\TextInput::make('range_end')
+                ->label('End Range')
+                ->required()
+                ->numeric()
+                ->minValue(1)
+                ->step(1),
 
-        return $form
-            ->schema([
-                Forms\Components\Grid::make()
-                    ->schema([
-                        Forms\Components\TextInput::make('range_start')
-                            ->label('Box start')
-                            ->required()
-                            ->numeric()
-                            ->minValue(0)
-                            ->step(1)
-                            ->helperText('Enter the starting box number'),
-
-                        Forms\Components\TextInput::make('range_end')
-                            ->label('Box end')
-                            ->required()
-                            ->numeric()
-                            ->minValue(1)
-                            ->step(1)
-                            ->helperText('Enter the ending box number')
-                            ->rules([
-                                'required',
-                                'numeric',
-                                'min:1',
-                                function ($state) use ($parentTeamRanges) {
-                                    return function ($attribute, $value, $fail) use ($state, $parentTeamRanges) {
-                                        $startRange = data_get($state, 'range_start');
-                                        if ($startRange === null) {
-                                            return; // Let the required validation handle this
-                                        }
-
-                                        // Convert to actual numbers for comparison
-                                        $startNumber = ($startRange * 1000) + 1;
-                                        $endNumber = $value * 1000;
-
-                                        if ($endNumber <= $startNumber) {
-                                            $fail('End range must be greater than start range.');
-                                            return;
-                                        }
-
-                                        $user = auth()->user();
-                                        $team = $this->getOwnerRecord();
-
-                                        if ($user->hasRole('team_admin') && $parentTeamRanges) {
-                                            // Verify range is within parent team's ranges
-                                            $isWithinParentRange = false;
-                                            foreach ($parentTeamRanges as $parentRange) {
-                                                if ($startNumber >= $parentRange->start_number &&
-                                                    $endNumber <= $parentRange->end_number) {
-                                                    $isWithinParentRange = true;
-                                                    break;
-                                                }
-                                            }
-
-                                            if (!$isWithinParentRange) {
-                                                $fail("Range must be within parent team's allocated ranges.");
-                                                return;
-                                            }
-                                        }
-
-                                        // Check for overlapping ranges
-                                        $query = $team->numberRanges()
-                                            ->where(function ($query) use ($startNumber, $endNumber) {
-                                                $query->where(function ($q) use ($startNumber) {
-                                                    $q->where('start_number', '<=', $startNumber)
-                                                        ->where('end_number', '>=', $startNumber);
-                                                })->orWhere(function ($q) use ($endNumber) {
-                                                    $q->where('start_number', '<=', $endNumber)
-                                                        ->where('end_number', '>=', $endNumber);
-                                                })->orWhere(function ($q) use ($startNumber, $endNumber) {
-                                                    $q->where('start_number', '>=', $startNumber)
-                                                        ->where('end_number', '<=', $endNumber);
-                                                });
-                                            });
-
-                                        if ($team) {
-                                            $query->where('team_id', $team->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with existing ranges.');
-                                        }
-                                    };
-                                },
-                            ]),
-                    ])->columns(2),
-
-                Forms\Components\TextInput::make('description')
-                    ->maxLength(255),
-
-                Forms\Components\Placeholder::make('actual_range')
-                    ->label('Actual Number Range')
-                    ->content(function ($get) {
-                        if ($get('range_start') !== null && $get('range_end') !== null) {
-                            $start = ($get('range_start') * 1000) + 1;
-                            $end = $get('range_end') * 1000;
-                            return number_format($start) . ' - ' . number_format($end);
-                        }
-                        return 'Enter range values to see actual numbers';
-                    }),
-
-                // Show available parent ranges for team_admin
-                Forms\Components\Placeholder::make('available_ranges')
-                    ->label('Available Parent Ranges')
-                    ->content(function () use ($parentTeamRanges) {
-                        if ($parentTeamRanges) {
-                            return $parentTeamRanges->map(function ($range) {
-                                return "Range {$range->range_start}-{$range->range_end} " .
-                                    "({$range->start_number}-{$range->end_number})";
-                            })->join(', ');
-                        }
-                        return '';
-                    })
-                    ->visible(fn () => auth()->user()->hasRole('team_admin')),
-            ]);
-    }
+            Forms\Components\TextInput::make('description')
+                ->maxLength(255),
+        ]);
+}
 
     public function table(Table $table): Table
     {
@@ -195,4 +90,15 @@ class NumberRangesRelationManager extends RelationManager
                 ]),
             ]);
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+{
+    app(NumberRangeService::class)->validateRange($data, $this->record ?? null);
+    return $data;
+}
+
+protected function afterSave(): void
+{
+    app(NumberRangeService::class)->update($this->record, $this->form->getState());
+}
 }

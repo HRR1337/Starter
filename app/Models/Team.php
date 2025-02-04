@@ -208,4 +208,9 @@ class Team extends Model
 {
     return $this->belongsToMany(User::class)->withTimestamps();
 }
+
+public function numberRanges(): HasMany
+{
+    return $this->hasMany(NumberRange::class, 'team_id');
+}
 }

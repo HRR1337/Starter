@@ -12,6 +12,7 @@ use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use App\Services\NumberRangeService;
 
 class NumberRangeResource extends Resource
 {
@@ -24,133 +25,35 @@ class NumberRangeResource extends Resource
     protected static bool $isScopedToTenant = false;
 
     public static function form(Form $form): Form
-    {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('team_id')
-                    ->relationship('team', 'name')
-                    ->required()
-                    ->visible(fn () => auth()->user()->can('create', NumberRange::class))
-                    ->disabled(fn () => auth()->user()->hasRole('team_admin')),
+{
+    return $form
+        ->schema([
+            Forms\Components\Select::make('team_id')
+                ->relationship('team', 'name')
+                ->required(),
 
-                Forms\Components\Grid::make()
-                    ->schema([
-                        Forms\Components\TextInput::make('range_start')
-                            ->label('Box start')
-                            ->required()
-                            ->numeric()
-                            ->minValue(0)
-                            ->step(1)
-                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->helperText('Enter the starting box number'),
+            Forms\Components\Grid::make()
+                ->schema([
+                    Forms\Components\TextInput::make('range_start')
+                        ->label('Start Range')
+                        ->required()
+                        ->numeric()
+                        ->minValue(0)
+                        ->step(1),
 
-                        Forms\Components\TextInput::make('range_end')
-                            ->label('Box end')
-                            ->required()
-                            ->numeric()
-                            ->minValue(1)
-                            ->step(1)
-                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->helperText('Enter the ending box number')
-                            ->rules([
-                                fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
-                                    if ($value <= $get('range_start')) {
-                                        $fail('End range must be greater than start range.');
-                                        return;
-                                    }
+                    Forms\Components\TextInput::make('range_end')
+                        ->label('End Range')
+                        ->required()
+                        ->numeric()
+                        ->minValue(1)
+                        ->step(1),
+                ])
+                ->columns(2),
 
-                                    // Convert range numbers naar daadwerkelijke getallen
-                                    $startNumber = ($get('range_start') * 1000) + 1;
-                                    $endNumber = $value * 1000;
-
-                                    if (auth()->user()->hasRole('super_admin')) {
-                                        // Super admins mogen elke range instellen, maar ze mogen niet overlappen
-                                        $query = NumberRange::where(function ($query) use ($startNumber, $endNumber) {
-                                            $query->where(function ($q) use ($startNumber, $endNumber) {
-                                                $q->where(function ($inner) use ($startNumber) {
-                                                    $inner->where('start_number', '<=', $startNumber)
-                                                          ->where('end_number', '>=', $startNumber);
-                                                })->orWhere(function ($inner) use ($endNumber) {
-                                                    $inner->where('start_number', '<=', $endNumber)
-                                                          ->where('end_number', '>=', $endNumber);
-                                                })->orWhere(function ($inner) use ($startNumber, $endNumber) {
-                                                    $inner->where('start_number', '>=', $startNumber)
-                                                          ->where('end_number', '<=', $endNumber);
-                                                });
-                                            });
-                                        });
-
-                                        if ($record) {
-                                            $query->where('id', '!=', $record->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with an existing range.');
-                                        }
-                                        return;
-                                    }
-
-                                    // Team admins mogen alleen sub-ranges instellen binnen een super_admin range
-                                    if (auth()->user()->hasRole('team_admin')) {
-                                        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
-
-                                        // Haal alle super_admin-ranges op
-                                        $originalRanges = NumberRange::whereNull('created_by') // Alleen super_admin ranges
-                                            ->get(['start_number', 'end_number']);
-
-                                        $isWithinSuperAdminRange = $originalRanges->contains(function ($range) use ($startNumber, $endNumber) {
-                                            return $range->start_number <= $startNumber && $range->end_number >= $endNumber;
-                                        });
-
-                                        if (!$isWithinSuperAdminRange) {
-                                            $fail('Your range must be within an original super_admin range.');
-                                            return;
-                                        }
-
-                                        // Controleer of de nieuwe range overlapt met een bestaand sub-team range
-                                        $query = NumberRange::whereIn('team_id', $userTeamIds)
-                                            ->where(function ($query) use ($startNumber, $endNumber) {
-                                                $query->where(function ($q) use ($startNumber, $endNumber) {
-                                                    $q->where(function ($inner) use ($startNumber) {
-                                                        $inner->where('start_number', '<=', $startNumber)
-                                                              ->where('end_number', '>=', $startNumber);
-                                                    })->orWhere(function ($inner) use ($endNumber) {
-                                                        $inner->where('start_number', '<=', $endNumber)
-                                                              ->where('end_number', '>=', $endNumber);
-                                                    })->orWhere(function ($inner) use ($startNumber, $endNumber) {
-                                                        $inner->where('start_number', '>=', $startNumber)
-                                                              ->where('end_number', '<=', $endNumber);
-                                                    });
-                                                });
-                                            });
-
-                                        if ($record) {
-                                            $query->where('id', '!=', $record->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with an existing sub-team range.');
-                                        }
-                                    }
-                                },
-                            ]),
-                    ])->columns(2),
-
-                Forms\Components\TextInput::make('description')
-                    ->maxLength(255),
-
-                Forms\Components\Placeholder::make('actual_range')
-                    ->label('Actual Number Range')
-                    ->content(function ($get) {
-                        if ($get('range_start') !== null && $get('range_end') !== null) {
-                            $start = ($get('range_start') * 1000) + 1;
-                            $end = $get('range_end') * 1000;
-                            return number_format($start) . ' - ' . number_format($end);
-                        }
-                        return 'Enter range values to see actual numbers';
-                    }),
-            ]);
-    }
+            Forms\Components\TextInput::make('description')
+                ->maxLength(255),
+        ]);
+}
 
     public static function table(Table $table): Table
     {
@@ -221,4 +124,12 @@ class NumberRangeResource extends Resource
 
         return $query->whereIn('team_id', $userTeamIds);
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        app(NumberRangeService::class)->validateRange($data);
+        return $data;
+    }
+
+
 }
