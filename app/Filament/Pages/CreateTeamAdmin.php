@@ -4,16 +4,12 @@ namespace App\Filament\Pages;
 
 use App\Models\Team;
 use App\Models\User;
-use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
-use App\Models\NumberRange;
 use Illuminate\Support\Str;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Repeater;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Hash;
 use Filament\Forms\Components\Wizard;
@@ -79,28 +75,7 @@ class CreateTeamAdmin extends Page implements HasForms
                                 ]),
                         ]),
 
-                    Wizard\Step::make('Number Ranges')
-                        ->schema([
-                            Repeater::make('ranges')
-                                ->schema([
-                                    TextInput::make('start_number')
-                                        ->label('Start Number')
-                                        ->required()
-                                        ->numeric()
-                                        ->minValue(1),
-                                    TextInput::make('end_number')
-                                        ->label('End Number')
-                                        ->required()
-                                        ->numeric()
-                                        ->minValue(1),
-                                    TextInput::make('description')
-                                        ->label('Range Description')
-                                        ->maxLength(255),
-                                ])
-                                ->defaultItems(1)
-                                ->minItems(1)
-                                ->columns(3),
-                        ]),
+
                 ])
                 ->submitAction(
                     Action::make('create')
@@ -140,22 +115,6 @@ class CreateTeamAdmin extends Page implements HasForms
 
             // Attach User to Team
             $team->users()->attach($user->id);
-
-            // Create Number Ranges
-            foreach ($state['ranges'] as $range) {
-                // Validate range
-                if ($range['end_number'] <= $range['start_number']) {
-                    throw new \Exception('End number must be greater than start number.');
-                }
-
-                NumberRange::create([
-                    'team_id' => $team->id,
-                    'start_number' => $range['start_number'],
-                    'end_number' => $range['end_number'],
-                    'description' => $range['description'],
-                    'created_by' => auth()->id(),
-                ]);
-            }
 
             \DB::commit();
 
