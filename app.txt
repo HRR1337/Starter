@@ -299,6 +299,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class Team extends Model
 {
@@ -317,86 +319,76 @@ class Team extends Model
         'is_active' => 'boolean',
     ];
 
-    // Add boot method for setting the level
+    /**
+     * Boot method for setting hierarchy level automatically.
+     */
     protected static function boot()
     {
         parent::boot();
 
         static::saving(function ($team) {
-            if ($team->parent_id) {
-                // Update the level based on the parent's level
-                $parentTeam = Team::find($team->parent_id);
-                $team->level = $parentTeam ? $parentTeam->level + 1 : 0;
-            } else {
-                // Root level team
-                $team->level = 0;
-            }
+            $team->level = $team->parent ? $team->parent->level + 1 : 0;
         });
     }
 
-    // Helper method to get all descendants
-    public function getDescendants($teamId, &$descendants)
-    {
-        $childTeams = Team::where('parent_id', $teamId)->get();
-        
-        foreach ($childTeams as $child) {
-            $descendants->push($child->id);
-            $this->getDescendants($child->id, $descendants);
-        }
-    }
-
-    // Existing relationships
-    public function users(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class)->withTimestamps();
-    }
-
-    public function createdBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function numberRanges(): HasMany
-    {
-        return $this->hasMany(NumberRange::class);
-    }
-
-    // Hierarchy relationships
+    /**
+     * Get direct parent of the team.
+     */
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Team::class, 'parent_id');
     }
 
+    /**
+     * Get direct children of the team.
+     */
     public function children(): HasMany
     {
-        return $this->hasMany(Team::class, 'parent_id');
+        return $this->hasMany(Team::class, 'parent_id')->with('children');
     }
 
-    // Helper methods for hierarchy
-    public function allChildren()
+    /**
+     * Get all descendants recursively.
+     */
+    public function descendants(): HasMany
     {
-        return $this->children()->with('children');
+        return $this->hasMany(Team::class, 'parent_id')->with('descendants');
     }
 
+    /**
+     * Get all ancestors recursively.
+     */
     public function ancestors()
     {
-        return $this->parent()->with('parent');
+        return $this->parent()->with('ancestors');
     }
 
-    // Get all descendants as a flat collection
-    public function getAllDescendants(): \Illuminate\Support\Collection
+    /**
+     * Get all descendants as a flat collection using a Recursive CTE.
+     */
+    public function getAllDescendants(): Collection
     {
-        $descendants = collect();
-        $this->getDescendants($this->id, $descendants);
-        return $descendants;
+        $results = DB::select("
+            WITH RECURSIVE team_tree AS (
+                SELECT id, parent_id FROM teams WHERE id = ?
+                UNION ALL
+                SELECT t.id, t.parent_id FROM teams t
+                INNER JOIN team_tree tt ON t.parent_id = tt.id
+            )
+            SELECT * FROM team_tree WHERE id != ?
+        ", [$this->id, $this->id]);
+    
+        return collect($results); 
     }
 
-    // Get all ancestors as a collection
-    public function getAllAncestors(): \Illuminate\Support\Collection
+    /**
+     * Get all ancestors as a flat collection.
+     */
+    public function getAllAncestors(): Collection
     {
         $ancestors = collect();
         $parent = $this->parent;
-        
+
         while ($parent) {
             $ancestors->push($parent);
             $parent = $parent->parent;
@@ -405,33 +397,49 @@ class Team extends Model
         return $ancestors;
     }
 
-    // Scopes
+    /**
+     * Scope to only active teams.
+     */
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true);
     }
 
+    /**
+     * Scope to only root-level teams.
+     */
     public function scopeRootLevel(Builder $query): void
     {
         $query->whereNull('parent_id');
     }
 
+    /**
+     * Scope teams by type.
+     */
     public function scopeOfType(Builder $query, string $type): void
     {
         $query->where('type', $type);
     }
 
-    // Helper methods
+    /**
+     * Check if this team is a root team.
+     */
     public function isRoot(): bool
     {
         return is_null($this->parent_id);
     }
 
+    /**
+     * Check if this team has children.
+     */
     public function hasChildren(): bool
     {
-        return $this->children()->count() > 0;
+        return $this->children()->exists();
     }
 
+    /**
+     * Get full hierarchy string (e.g., "Company > Division > Department").
+     */
     public function getFullHierarchyAttribute(): string
     {
         $hierarchy = collect([$this->name]);
@@ -445,40 +453,64 @@ class Team extends Model
         return $hierarchy->join(' > ');
     }
 
-    // Get the depth level in the hierarchy
+    /**
+     * Get the depth level in the hierarchy.
+     */
     public function getDepthLevel(): int
     {
         return $this->level;
     }
 
-    // Check if this team is a descendant of another team
+    /**
+     * Check if this team is a descendant of another team.
+     */
     public function isDescendantOf(Team $team): bool
     {
         return $this->getAllAncestors()->contains($team);
     }
 
-    // Check if this team is an ancestor of another team
+    /**
+     * Check if this team is an ancestor of another team.
+     */
     public function isAncestorOf(Team $team): bool
     {
         return $team->getAllAncestors()->contains($this);
     }
 
-    // Get siblings (other teams with the same parent)
-    public function getSiblings()
+    /**
+     * Get siblings (other teams with the same parent).
+     */
+    public function getSiblings(): Collection
     {
         return Team::where('parent_id', $this->parent_id)
             ->where('id', '!=', $this->id)
             ->get();
     }
 
-    // Move team to a new parent
+    /**
+     * Move team to a new parent.
+     */
     public function moveTo(?Team $newParent = null)
     {
         $this->parent_id = $newParent ? $newParent->id : null;
-        $this->save(); // This will trigger the validation in boot()
+        $this->save();
     }
+
+    public function users(): BelongsToMany
+{
+    return $this->belongsToMany(User::class)->withTimestamps();
 }
 
+public function numberRanges(): HasMany
+{
+    return $this->hasMany(NumberRange::class, 'team_id');
+}
+
+public function createdBy(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'created_by');
+}
+}
 
 Models/User.php
 
@@ -569,6 +601,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class NumberRange extends Model
 {
@@ -576,13 +609,16 @@ class NumberRange extends Model
         'team_id',
         'start_number',
         'end_number',
+        'parent_id',
         'description',
         'created_by',
     ];
 
     protected $appends = ['range_start', 'range_end'];
 
-    // Convert range number to actual number when saving
+    /**
+     * Convert range number to actual number when saving.
+     */
     public function setRangeStartAttribute($value)
     {
         $this->attributes['start_number'] = ($value * 1000) + 1;
@@ -593,7 +629,9 @@ class NumberRange extends Model
         $this->attributes['end_number'] = $value * 1000;
     }
 
-    // Convert actual number to range number for display
+    /**
+     * Convert actual number to range number for display.
+     */
     public function getRangeStartAttribute()
     {
         return floor($this->start_number / 1000);
@@ -604,17 +642,72 @@ class NumberRange extends Model
         return floor($this->end_number / 1000);
     }
 
+    /**
+     * Relationship: Number range belongs to a team.
+     */
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
     }
 
+    /**
+     * Relationship: Number range is created by a user.
+     */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
-}
 
+    /**
+     * Relationship: Parent range (if this is a sub-range).
+     */
+
+     public function parent(): BelongsTo
+     {
+         return $this->belongsTo(NumberRange::class, 'parent_id')->withDefault([
+             'name' => '(No Parent)', // Zorgt ervoor dat null een standaardwaarde krijgt
+         ]);
+     }
+
+    /**
+     * Relationship: Children ranges (sub-ranges that derive from this range).
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(NumberRange::class, 'parent_id');
+    }
+
+    /**
+     * Check if a given range is within its parent range.
+     */
+    public function isWithinParent(): bool
+    {
+        if (!$this->parent) {
+            return true; // No parent, no restriction
+        }
+
+        return $this->start_number >= $this->parent->start_number &&
+               $this->end_number <= $this->parent->end_number;
+    }
+
+    /**
+     * Check if the current range overlaps with existing sub-ranges.
+     */
+    public function overlapsWithExistingSubranges(): bool
+    {
+        return self::where('parent_id', $this->parent_id)
+            ->where(function ($query) {
+                $query->whereBetween('start_number', [$this->start_number, $this->end_number])
+                      ->orWhereBetween('end_number', [$this->start_number, $this->end_number])
+                      ->orWhere(function ($q) {
+                          $q->where('start_number', '<=', $this->start_number)
+                            ->where('end_number', '>=', $this->end_number);
+                      });
+            })
+            ->where('id', '!=', $this->id) // Ignore self when checking updates
+            ->exists();
+    }
+}
 
 Exceptions/Handler.php
 
@@ -1481,7 +1574,8 @@ use Filament\Tables;
 use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
+use App\Services\NumberRangeService;
+use Illuminate\Support\Facades\Auth;
 
 class NumberRangeResource extends Resource
 {
@@ -1499,9 +1593,15 @@ class NumberRangeResource extends Resource
             ->schema([
                 Forms\Components\Select::make('team_id')
                     ->relationship('team', 'name')
-                    ->required()
-                    ->visible(fn () => auth()->user()->can('create', NumberRange::class))
-                    ->disabled(fn () => auth()->user()->hasRole('team_admin')),
+                    ->required(),
+
+                Forms\Components\Select::make('parent_id')
+                    ->label('Parent Range (Optional)')
+                    ->relationship('parent', 'description')
+                    ->getOptionLabelFromRecordUsing(fn($record) => $record->description ?? '[No Description]')
+                    ->searchable()
+                    ->preload()
+                    ->nullable(),
 
                 Forms\Components\Grid::make()
                     ->schema([
@@ -1510,117 +1610,24 @@ class NumberRangeResource extends Resource
                             ->required()
                             ->numeric()
                             ->minValue(0)
-                            ->step(1)
-                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->hint('Example: 0 means 1-1000, 1 means 1001-2000')
-                            ->helperText('Enter the starting range number'),
+                            ->step(1),
 
                         Forms\Components\TextInput::make('range_end')
                             ->label('End Range')
                             ->required()
                             ->numeric()
                             ->minValue(1)
-                            ->step(1)
-                            ->disabled(fn () => !auth()->user()->hasRole('super_admin'))
-                            ->hint('Example: 1 means 1000, 2 means 2000')
-                            ->helperText('Enter the ending range number')
-                            ->rules([
-                                fn ($get, $record) => function ($attribute, $value, $fail) use ($get, $record) {
-                                    if ($value <= $get('range_start')) {
-                                        $fail('End range must be greater than start range.');
-                                        return;
-                                    }
-
-                                    // Convert range numbers naar daadwerkelijke getallen
-                                    $startNumber = ($get('range_start') * 1000) + 1;
-                                    $endNumber = $value * 1000;
-
-                                    if (auth()->user()->hasRole('super_admin')) {
-                                        // Super admins mogen elke range instellen, maar ze mogen niet overlappen
-                                        $query = NumberRange::where(function ($query) use ($startNumber, $endNumber) {
-                                            $query->where(function ($q) use ($startNumber, $endNumber) {
-                                                $q->where(function ($inner) use ($startNumber) {
-                                                    $inner->where('start_number', '<=', $startNumber)
-                                                          ->where('end_number', '>=', $startNumber);
-                                                })->orWhere(function ($inner) use ($endNumber) {
-                                                    $inner->where('start_number', '<=', $endNumber)
-                                                          ->where('end_number', '>=', $endNumber);
-                                                })->orWhere(function ($inner) use ($startNumber, $endNumber) {
-                                                    $inner->where('start_number', '>=', $startNumber)
-                                                          ->where('end_number', '<=', $endNumber);
-                                                });
-                                            });
-                                        });
-
-                                        if ($record) {
-                                            $query->where('id', '!=', $record->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with an existing range.');
-                                        }
-                                        return;
-                                    }
-
-                                    // Team admins mogen alleen sub-ranges instellen binnen een super_admin range
-                                    if (auth()->user()->hasRole('team_admin')) {
-                                        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
-
-                                        // Haal alle super_admin-ranges op
-                                        $originalRanges = NumberRange::whereNull('created_by') // Alleen super_admin ranges
-                                            ->get(['start_number', 'end_number']);
-
-                                        $isWithinSuperAdminRange = $originalRanges->contains(function ($range) use ($startNumber, $endNumber) {
-                                            return $range->start_number <= $startNumber && $range->end_number >= $endNumber;
-                                        });
-
-                                        if (!$isWithinSuperAdminRange) {
-                                            $fail('Your range must be within an original super_admin range.');
-                                            return;
-                                        }
-
-                                        // Controleer of de nieuwe range overlapt met een bestaand sub-team range
-                                        $query = NumberRange::whereIn('team_id', $userTeamIds)
-                                            ->where(function ($query) use ($startNumber, $endNumber) {
-                                                $query->where(function ($q) use ($startNumber, $endNumber) {
-                                                    $q->where(function ($inner) use ($startNumber) {
-                                                        $inner->where('start_number', '<=', $startNumber)
-                                                              ->where('end_number', '>=', $startNumber);
-                                                    })->orWhere(function ($inner) use ($endNumber) {
-                                                        $inner->where('start_number', '<=', $endNumber)
-                                                              ->where('end_number', '>=', $endNumber);
-                                                    })->orWhere(function ($inner) use ($startNumber, $endNumber) {
-                                                        $inner->where('start_number', '>=', $startNumber)
-                                                              ->where('end_number', '<=', $endNumber);
-                                                    });
-                                                });
-                                            });
-
-                                        if ($record) {
-                                            $query->where('id', '!=', $record->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with an existing sub-team range.');
-                                        }
-                                    }
-                                },
-                            ]),
-                    ])->columns(2),
+                            ->step(1),
+                    ])
+                    ->columns(2),
 
                 Forms\Components\TextInput::make('description')
                     ->maxLength(255),
 
-                Forms\Components\Placeholder::make('actual_range')
-                    ->label('Actual Number Range')
-                    ->content(function ($get) {
-                        if ($get('range_start') !== null && $get('range_end') !== null) {
-                            $start = ($get('range_start') * 1000) + 1;
-                            $end = $get('range_end') * 1000;
-                            return number_format($start) . ' - ' . number_format($end);
-                        }
-                        return 'Enter range values to see actual numbers';
-                    }),
+                // Voeg een hidden field toe voor created_by
+                Forms\Components\Hidden::make('created_by')
+                    ->default(fn() => auth()->id())
+                    ->dehydrated(true), // Zorgt ervoor dat de waarde wordt meegestuurd
             ]);
     }
 
@@ -1629,33 +1636,43 @@ class NumberRangeResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('team.name')
+                    ->label('Team')
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('parent.description')
+                    ->label('Parent Range')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('range_start')
+                    ->label('Box Start'),
+                Tables\Columns\TextColumn::make('range_end')
+                    ->label('Box End'),
                 Tables\Columns\TextColumn::make('start_number')
                     ->label('Start Number')
-                    ->formatStateUsing(fn ($record) => number_format($record->start_number))
+                    ->formatStateUsing(fn($record) => number_format($record->start_number))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('end_number')
                     ->label('End Number')
-                    ->formatStateUsing(fn ($record) => number_format($record->end_number))
+                    ->formatStateUsing(fn($record) => number_format($record->end_number))
                     ->sortable(),
-                Tables\Columns\TextColumn::make('description')
-                    ->searchable(),
+
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Created By'),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime(),
+               // Tables\Columns\TextColumn::make('created_at')
+                //    ->dateTime(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (NumberRange $record) => auth()->user()->can('update', $record)),
-    
+                    ->visible(fn(NumberRange $record) => auth()->user()->can('update', $record)),
+
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (NumberRange $record) => auth()->user()->can('delete', $record)),
+                    ->visible(fn(NumberRange $record) => auth()->user()->can('delete', $record))
+                    ->before(fn(NumberRange $record) => app(NumberRangeService::class)->delete($record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                        ->visible(fn() => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
     }
@@ -1684,12 +1701,24 @@ class NumberRangeResource extends Resource
             return $query;
         }
 
-        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+        $userTeamIds = auth()->user()->teams->flatMap(fn($team) => $team->getAllDescendants()->prepend($team->id));
 
         return $query->whereIn('team_id', $userTeamIds);
     }
-}
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        app(NumberRangeService::class)->validateRange($data);
+        return $data;
+    }
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['created_by'] = auth()->id();
+        \Log::info('Creating number range with data:', $data);
+        return $data;
+    }
+}
 
 Filament/Resources/UserResource.php
 
@@ -1981,10 +2010,10 @@ class TeamResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
+                //Tables\Columns\TextColumn::make('name')
+                //    ->searchable(),
                 Tables\Columns\TextColumn::make('full_hierarchy')
-                    ->label('Hierarchy')
+                    ->label('Team')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('type')
                     ->badge(),
@@ -2740,8 +2769,12 @@ use Filament\Forms;
 use Filament\Tables;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Log;
+use App\Services\NumberRangeService;
+use App\Models\NumberRange;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Notifications\Notification;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\Model;
 
 class NumberRangesRelationManager extends RelationManager
 {
@@ -2753,19 +2786,24 @@ class NumberRangesRelationManager extends RelationManager
 
     public function form(Form $form): Form
     {
-        $user = auth()->user();
-        $parentTeamRanges = null;
-
-        // If team_admin, get parent team's ranges
-        if ($user->hasRole('team_admin')) {
-            $parentTeam = $this->getOwnerRecord()->parent;
-            if ($parentTeam) {
-                $parentTeamRanges = $parentTeam->numberRanges;
-            }
-        }
-
         return $form
             ->schema([
+                Forms\Components\Select::make('parent_id')
+                    ->label('Parent Range (Optional)')
+                    ->relationship('parent', 'description')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => 
+                        sprintf(
+                            '%s (Range: %d-%d)', 
+                            $record->description ?? 'No Description',
+                            $record->range_start,
+                            $record->range_end
+                        )
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->nullable()
+                    ->helperText('Select a parent range if this is a sub-range'),
+
                 Forms\Components\Grid::make()
                     ->schema([
                         Forms\Components\TextInput::make('range_start')
@@ -2774,8 +2812,7 @@ class NumberRangesRelationManager extends RelationManager
                             ->numeric()
                             ->minValue(0)
                             ->step(1)
-                            ->hint('Example: 0 means 1-1000, 1 means 1001-2000')
-                            ->helperText('Enter the starting range number'),
+                            ->helperText('Enter the starting box number'),
 
                         Forms\Components\TextInput::make('range_end')
                             ->label('End Range')
@@ -2783,102 +2820,17 @@ class NumberRangesRelationManager extends RelationManager
                             ->numeric()
                             ->minValue(1)
                             ->step(1)
-                            ->hint('Example: 1 means 1000, 2 means 2000')
-                            ->helperText('Enter the ending range number')
-                            ->rules([
-                                'required',
-                                'numeric',
-                                'min:1',
-                                function ($state) use ($parentTeamRanges) {
-                                    return function ($attribute, $value, $fail) use ($state, $parentTeamRanges) {
-                                        $startRange = data_get($state, 'range_start');
-                                        if ($startRange === null) {
-                                            return; // Let the required validation handle this
-                                        }
-
-                                        // Convert to actual numbers for comparison
-                                        $startNumber = ($startRange * 1000) + 1;
-                                        $endNumber = $value * 1000;
-
-                                        if ($endNumber <= $startNumber) {
-                                            $fail('End range must be greater than start range.');
-                                            return;
-                                        }
-
-                                        $user = auth()->user();
-                                        $team = $this->getOwnerRecord();
-
-                                        if ($user->hasRole('team_admin') && $parentTeamRanges) {
-                                            // Verify range is within parent team's ranges
-                                            $isWithinParentRange = false;
-                                            foreach ($parentTeamRanges as $parentRange) {
-                                                if ($startNumber >= $parentRange->start_number &&
-                                                    $endNumber <= $parentRange->end_number) {
-                                                    $isWithinParentRange = true;
-                                                    break;
-                                                }
-                                            }
-
-                                            if (!$isWithinParentRange) {
-                                                $fail("Range must be within parent team's allocated ranges.");
-                                                return;
-                                            }
-                                        }
-
-                                        // Check for overlapping ranges
-                                        $query = $team->numberRanges()
-                                            ->where(function ($query) use ($startNumber, $endNumber) {
-                                                $query->where(function ($q) use ($startNumber) {
-                                                    $q->where('start_number', '<=', $startNumber)
-                                                        ->where('end_number', '>=', $startNumber);
-                                                })->orWhere(function ($q) use ($endNumber) {
-                                                    $q->where('start_number', '<=', $endNumber)
-                                                        ->where('end_number', '>=', $endNumber);
-                                                })->orWhere(function ($q) use ($startNumber, $endNumber) {
-                                                    $q->where('start_number', '>=', $startNumber)
-                                                        ->where('end_number', '<=', $endNumber);
-                                                });
-                                            });
-
-                                        if ($team) {
-                                            $query->where('team_id', $team->id);
-                                        }
-
-                                        if ($query->exists()) {
-                                            $fail('This range overlaps with existing ranges.');
-                                        }
-                                    };
-                                },
-                            ]),
-                    ])->columns(2),
+                            ->helperText('Enter the ending box number'),
+                    ])
+                    ->columns(2),
 
                 Forms\Components\TextInput::make('description')
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->helperText('Optional description for this range'),
 
-                Forms\Components\Placeholder::make('actual_range')
-                    ->label('Actual Number Range')
-                    ->content(function ($get) {
-                        if ($get('range_start') !== null && $get('range_end') !== null) {
-                            $start = ($get('range_start') * 1000) + 1;
-                            $end = $get('range_end') * 1000;
-                            return number_format($start) . ' - ' . number_format($end);
-                        }
-                        return 'Enter range values to see actual numbers';
-                    }),
-
-                // Show available parent ranges for team_admin
-                Forms\Components\Placeholder::make('available_ranges')
-                    ->label('Available Parent Ranges')
-                    ->content(function () use ($parentTeamRanges) {
-                        if ($parentTeamRanges) {
-                            return $parentTeamRanges->map(function ($range) {
-                                return "Range {$range->range_start}-{$range->range_end} " .
-                                    "({$range->start_number}-{$range->end_number})";
-                            })->join(', ');
-                        }
-                        return '';
-                    })
-                    ->visible(fn () => auth()->user()->hasRole('team_admin')),
+                Forms\Components\Hidden::make('created_by')
+                    ->default(fn () => auth()->id())
+                    ->dehydrated(true),
             ]);
     }
 
@@ -2886,51 +2838,133 @@ class NumberRangesRelationManager extends RelationManager
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('parent.description')
+                    ->label('Parent Range')
+                    ->description(fn (NumberRange $record) => 
+                        $record->parent 
+                            ? "Range: {$record->parent->range_start}-{$record->parent->range_end}" 
+                            : null
+                    )
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('range_start')
+                    ->label('Box Start')
+                    ->sortable(false),
+
+                Tables\Columns\TextColumn::make('range_end')
+                    ->label('Box End')
+                    ->sortable(false),
+
                 Tables\Columns\TextColumn::make('start_number')
                     ->label('Start Number')
                     ->formatStateUsing(fn ($record) => number_format($record->start_number))
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('end_number')
                     ->label('End Number')
                     ->formatStateUsing(fn ($record) => number_format($record->end_number))
                     ->sortable(),
-                Tables\Columns\TextColumn::make('range_start')
-                    ->label('Range Start'),
-                Tables\Columns\TextColumn::make('range_end')
-                    ->label('Range End'),
+
+                Tables\Columns\TextColumn::make('creator.name')
+                    ->label('Created By')
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('description')
-                    ->searchable(),
+                    ->searchable()
+                    ->wrap(),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
-                    ->mutateFormDataUsing(function (array $data): array {
-                        $user = auth()->user();
-                        if (!$user) {
-                            abort(403, 'User is not authenticated.');
+                    ->using(function (array $data) {
+                        try {
+                            $data['team_id'] = $this->getOwnerRecord()->id;
+                            
+                            // Validate and create using the service
+                            return app(NumberRangeService::class)->create($data);
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Validation Error')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                            throw $e;
                         }
-
-                        $data['created_by'] = $user->id;
-
-                        // Log the data for debugging
-                        Log::info('Creating Number Range:', $data);
-
-                        return $data;
                     })
                     ->visible(fn () => auth()->user()->hasRole(['super_admin', 'team_admin'])),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
+                    ->using(function (NumberRange $record, array $data) {
+                        try {
+                            $data['team_id'] = $this->getOwnerRecord()->id;
+                            app(NumberRangeService::class)->update($record, $data);
+                            
+                            Notification::make()
+                                ->title('Success')
+                                ->body('Range updated successfully')
+                                ->success()
+                                ->send();
+
+                            return $record;
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Validation Error')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                            throw $e;
+                        }
+                    })
                     ->visible(fn ($record) => auth()->user()->can('update', $record)),
+
                 Tables\Actions\DeleteAction::make()
+                    ->using(function (NumberRange $record) {
+                        try {
+                            app(NumberRangeService::class)->delete($record);
+                            
+                            Notification::make()
+                                ->title('Success')
+                                ->body('Range deleted successfully')
+                                ->success()
+                                ->send();
+
+                            return true;
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Deletion Error')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                            return false;
+                        }
+                    })
                     ->visible(fn ($record) => auth()->user()->can('delete', $record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 ]),
-            ]);
+            ])
+            ->defaultSort('start_number', 'asc');
+    }
+
+    protected function canCreate(): bool
+    {
+        return auth()->user()->hasRole(['super_admin', 'team_admin']);
+    }
+
+    protected function canEdit(Model $record): bool
+    {
+        return auth()->user()->can('update', $record);
+    }
+
+    protected function canDelete(Model $record): bool
+    {
+        return auth()->user()->can('delete', $record);
     }
 }
+
 
 Filament/Resources/TeamResource/RelationManagers/UsersRelationManager.php
 
@@ -3183,6 +3217,7 @@ namespace App\Filament\Resources\NumberRangeResource\Pages;
 use App\Filament\Resources\NumberRangeResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use App\Services\NumberRangeService;
 
 class EditNumberRange extends EditRecord
 {
@@ -3194,8 +3229,12 @@ class EditNumberRange extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
-}
 
+    protected function afterSave(): void
+    {
+        app(NumberRangeService::class)->update($this->record, $this->form->getState());
+    }
+}
 
 Filament/Resources/NumberRangeResource/Pages/CreateNumberRange.php
 
@@ -3206,23 +3245,27 @@ Filament/Resources/NumberRangeResource/Pages/CreateNumberRange.php
 namespace App\Filament\Resources\NumberRangeResource\Pages;
 
 use App\Filament\Resources\NumberRangeResource;
-use Filament\Facades\Filament;
 use Filament\Resources\Pages\CreateRecord;
+use App\Services\NumberRangeService;
+use Filament\Notifications\Notification;
 
 class CreateNumberRange extends CreateRecord
 {
     protected static string $resource = NumberRangeResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function beforeCreate(): void
     {
-        $data['created_by'] = auth()->id();
-        
-        // Team admin mag alleen NumberRanges maken voor zijn eigen team
-        if (auth()->user()->hasRole('team_admin')) {
-            $data['team_id'] = Filament::getTenant()?->id ?? auth()->user()->teams->first()->id;
+        try {
+            app(NumberRangeService::class)->validateRange($this->data);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Notification::make()
+                ->title('Validation Error')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+
+            $this->halt();
         }
-    
-        return $data;
     }
 }
 
@@ -3758,6 +3801,203 @@ class ValidTeamHierarchy implements ValidationRule
                 $fail('Cannot set a descendant as parent.');
             }
         }
+    }
+}
+
+Services/NumberRangeService.php
+
+---content---
+
+<?php
+
+namespace App\Services;
+
+use App\Models\NumberRange;
+use App\Models\Team;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Filament\Notifications\Notification;
+
+class NumberRangeService
+{
+    /**
+     * Validate the number range before saving.
+     */
+    public function validateRange(array $data, ?NumberRange $record = null): void
+    {
+        // Basis validatie: Start moet kleiner zijn dan End
+        if ($data['range_end'] <= $data['range_start']) {
+            throw ValidationException::withMessages([
+                'range_end' => "End range ({$data['range_end']}) must be greater than start range ({$data['range_start']})."
+            ]);
+        }
+
+        $startNumber = ($data['range_start'] * 1000) + 1;
+        $endNumber = $data['range_end'] * 1000;
+
+        // Haal het team op waarvoor we de range maken
+        $team = Team::findOrFail($data['team_id']);
+
+        // ✅ 1. Controleer of het team al een bestaande range heeft die overlapt
+        $existingRanges = NumberRange::where('team_id', $data['team_id'])
+            ->where('id', '!=', $record->id ?? null) // Sluit eigen ID uit bij update
+            ->where(function ($query) use ($startNumber, $endNumber) {
+                $query->where(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '<=', $startNumber)
+                      ->where('end_number', '>=', $startNumber);
+                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '<=', $endNumber)
+                      ->where('end_number', '>=', $endNumber);
+                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '>=', $startNumber)
+                      ->where('end_number', '<=', $endNumber);
+                });
+            })
+            ->exists();
+
+        if ($existingRanges) {
+            throw ValidationException::withMessages([
+                'range_start' => "Your range ({$data['range_start']}-{$data['range_end']}) overlaps with an existing range for the same team."
+            ]);
+        }
+
+        // ✅ 2. Controleer of de range binnen de parent range valt (als er een parent is)
+        if ($team->parent_id) {
+            // Fetch ALL number ranges for the parent team
+            $parentTeamRanges = NumberRange::where('team_id', $team->parent_id)->get();
+            
+            $isWithinParentRange = false;
+        
+            foreach ($parentTeamRanges as $parentRange) {
+                if ($startNumber >= $parentRange->start_number && $endNumber <= $parentRange->end_number) {
+                    $isWithinParentRange = true;
+                    break;
+                }
+            }
+        
+            if (!$isWithinParentRange) {
+                throw ValidationException::withMessages([
+                    'range_start' => sprintf(
+                        'Your range (%d-%d) must be within at least one of your parent team\'s ranges: %s',
+                        $data['range_start'],
+                        $data['range_end'],
+                        $parentTeamRanges->map(fn ($r) => sprintf('%d-%d', floor($r->start_number / 1000), floor($r->end_number / 1000)))->implode(', ')
+                    )
+                ]);
+            }
+        }
+
+        // ✅ 3. Controleer overlapping met sibling teams (zelfde hiërarchie)
+        $siblingTeamIds = Team::where(function ($query) use ($team) {
+            if ($team->parent_id) {
+                $query->where('parent_id', $team->parent_id);
+            } else {
+                $query->whereNull('parent_id');
+            }
+        })->where('id', '!=', $team->id)
+          ->pluck('id');
+
+        $overlappingSiblingRanges = NumberRange::whereIn('team_id', $siblingTeamIds)
+            ->where(function ($query) use ($startNumber, $endNumber) {
+                $query->where(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '<=', $startNumber)
+                      ->where('end_number', '>=', $startNumber);
+                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '<=', $endNumber)
+                      ->where('end_number', '>=', $endNumber);
+                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                    $q->where('start_number', '>=', $startNumber)
+                      ->where('end_number', '<=', $endNumber);
+                });
+            });
+
+        if ($record) {
+            $overlappingSiblingRanges->where('id', '!=', $record->id);
+        }
+
+        $overlapping = $overlappingSiblingRanges->get();
+
+        if ($overlapping->isNotEmpty()) {
+            $messages = [];
+            foreach ($overlapping as $range) {
+                $messages[] = sprintf(
+                    'Your range (%d-%d) overlaps with existing range %d-%d from team %s',
+                    $data['range_start'],
+                    $data['range_end'],
+                    floor($range->start_number/1000),
+                    floor($range->end_number/1000),
+                    $range->team->name
+                );
+            }
+            
+            throw ValidationException::withMessages([
+                'range_start' => $messages[0]
+            ]);
+        }
+    }
+
+    /**
+     * Create a new number range.
+     */
+    public function create(array $data): NumberRange
+    {
+        try {
+            if (!isset($data['created_by'])) {
+                $data['created_by'] = auth()->id();
+            }
+
+            $this->validateRange($data);
+            
+            return DB::transaction(function () use ($data) {
+                return NumberRange::create([
+                    'team_id' => $data['team_id'],
+                    'parent_id' => $data['parent_id'] ?? null,
+                    'start_number' => ($data['range_start'] * 1000) + 1,
+                    'end_number' => $data['range_end'] * 1000,
+                    'description' => $data['description'] ?? null,
+                    'created_by' => $data['created_by'],
+                ]);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * Update an existing number range.
+     */
+    public function update(NumberRange $numberRange, array $data): void
+    {
+        try {
+            $this->validateRange($data, $numberRange);
+
+            DB::transaction(function () use ($numberRange, $data) {
+                $numberRange->update([
+                    'parent_id' => $data['parent_id'] ?? null,
+                    'start_number' => ($data['range_start'] * 1000) + 1,
+                    'end_number' => $data['range_end'] * 1000,
+                    'description' => $data['description'] ?? null,
+                ]);
+            });
+        } catch (ValidationException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete a number range.
+     */
+    public function delete(NumberRange $numberRange): void
+    {
+        if ($numberRange->children()->exists()) {
+            throw ValidationException::withMessages([
+                'delete' => 'Cannot delete a range that has sub-ranges.'
+            ]);
+        }
+
+        DB::transaction(function () use ($numberRange) {
+            $numberRange->delete();
+        });
     }
 }
 

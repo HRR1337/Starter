@@ -11,8 +11,8 @@ use Filament\Tables;
 use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 use App\Services\NumberRangeService;
+use Illuminate\Support\Facades\Auth;
 
 class NumberRangeResource extends Resource
 {
@@ -25,42 +25,60 @@ class NumberRangeResource extends Resource
     protected static bool $isScopedToTenant = false;
 
     public static function form(Form $form): Form
-{
-    return $form
-        ->schema([
-            Forms\Components\Select::make('team_id')
-                ->relationship('team', 'name')
-                ->required(),
+    {
+        return $form
+            ->schema([
+                Forms\Components\Select::make('team_id')
+                    ->relationship('team', 'name')
+                    ->required(),
 
-            Forms\Components\Grid::make()
-                ->schema([
-                    Forms\Components\TextInput::make('range_start')
-                        ->label('Start Range')
-                        ->required()
-                        ->numeric()
-                        ->minValue(0)
-                        ->step(1),
+                Forms\Components\Select::make('parent_id')
+                    ->label('Parent Range (Optional)')
+                    ->relationship('parent', 'description')
+                    ->getOptionLabelFromRecordUsing(fn($record) => $record->description ?? '[No Description]')
+                    ->searchable()
+                    ->preload()
+                    ->nullable(),
 
-                    Forms\Components\TextInput::make('range_end')
-                        ->label('End Range')
-                        ->required()
-                        ->numeric()
-                        ->minValue(1)
-                        ->step(1),
-                ])
-                ->columns(2),
+                Forms\Components\Grid::make()
+                    ->schema([
+                        Forms\Components\TextInput::make('range_start')
+                            ->label('Start Range')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(1),
 
-            Forms\Components\TextInput::make('description')
-                ->maxLength(255),
-        ]);
-}
+                        Forms\Components\TextInput::make('range_end')
+                            ->label('End Range')
+                            ->required()
+                            ->numeric()
+                            ->minValue(1)
+                            ->step(1),
+                    ])
+                    ->columns(2),
+
+                Forms\Components\TextInput::make('description')
+                    ->maxLength(255),
+
+                // Voeg een hidden field toe voor created_by
+                Forms\Components\Hidden::make('created_by')
+                    ->default(fn() => auth()->id())
+                    ->dehydrated(true), // Zorgt ervoor dat de waarde wordt meegestuurd
+            ]);
+    }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('team.name')
+                    ->label('Team')
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('parent.description')
+                    ->label('Parent Range')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('range_start')
                     ->label('Box Start'),
@@ -68,30 +86,30 @@ class NumberRangeResource extends Resource
                     ->label('Box End'),
                 Tables\Columns\TextColumn::make('start_number')
                     ->label('Start Number')
-                    ->formatStateUsing(fn ($record) => number_format($record->start_number))
+                    ->formatStateUsing(fn($record) => number_format($record->start_number))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('end_number')
                     ->label('End Number')
-                    ->formatStateUsing(fn ($record) => number_format($record->end_number))
+                    ->formatStateUsing(fn($record) => number_format($record->end_number))
                     ->sortable(),
-               // Tables\Columns\TextColumn::make('description')
-                //    ->searchable(),
+
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Created By'),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime(),
+               // Tables\Columns\TextColumn::make('created_at')
+                //    ->dateTime(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (NumberRange $record) => auth()->user()->can('update', $record)),
-    
+                    ->visible(fn(NumberRange $record) => auth()->user()->can('update', $record)),
+
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (NumberRange $record) => auth()->user()->can('delete', $record)),
+                    ->visible(fn(NumberRange $record) => auth()->user()->can('delete', $record))
+                    ->before(fn(NumberRange $record) => app(NumberRangeService::class)->delete($record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
+                        ->visible(fn() => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
     }
@@ -120,7 +138,7 @@ class NumberRangeResource extends Resource
             return $query;
         }
 
-        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
+        $userTeamIds = auth()->user()->teams->flatMap(fn($team) => $team->getAllDescendants()->prepend($team->id));
 
         return $query->whereIn('team_id', $userTeamIds);
     }
@@ -131,5 +149,10 @@ class NumberRangeResource extends Resource
         return $data;
     }
 
-
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['created_by'] = auth()->id();
+        \Log::info('Creating number range with data:', $data);
+        return $data;
+    }
 }

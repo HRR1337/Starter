@@ -213,4 +213,9 @@ public function numberRanges(): HasMany
 {
     return $this->hasMany(NumberRange::class, 'team_id');
 }
+
+public function createdBy(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'created_by');
+}
 }
