@@ -23,10 +23,6 @@ class Team extends Model
         'is_active',
     ];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
-
     /**
      * Boot method for setting hierarchy level automatically.
      */
@@ -37,6 +33,13 @@ class Team extends Model
         static::saving(function ($team) {
             $team->level = $team->parent ? $team->parent->level + 1 : 0;
         });
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
     }
 
     /**
