@@ -4,15 +4,13 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\NumberRangeResource\Pages;
 use App\Models\NumberRange;
+use App\Services\NumberRangeService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use App\Services\NumberRangeService;
-use Illuminate\Support\Facades\Auth;
 
 class NumberRangeResource extends Resource
 {
@@ -35,7 +33,7 @@ class NumberRangeResource extends Resource
                 Forms\Components\Select::make('parent_id')
                     ->label('Parent Range (Optional)')
                     ->relationship('parent', 'description')
-                    ->getOptionLabelFromRecordUsing(fn($record) => $record->description ?? '[No Description]')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->description ?? '[No Description]')
                     ->searchable()
                     ->preload()
                     ->nullable(),
@@ -63,7 +61,7 @@ class NumberRangeResource extends Resource
 
                 // Voeg een hidden field toe voor created_by
                 Forms\Components\Hidden::make('created_by')
-                    ->default(fn() => auth()->id())
+                    ->default(fn () => auth()->id())
                     ->dehydrated(true), // Zorgt ervoor dat de waarde wordt meegestuurd
             ]);
     }
@@ -86,30 +84,30 @@ class NumberRangeResource extends Resource
                     ->label('Box End'),
                 Tables\Columns\TextColumn::make('start_number')
                     ->label('Start Number')
-                    ->formatStateUsing(fn($record) => number_format($record->start_number))
+                    ->formatStateUsing(fn ($record) => number_format($record->start_number))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('end_number')
                     ->label('End Number')
-                    ->formatStateUsing(fn($record) => number_format($record->end_number))
+                    ->formatStateUsing(fn ($record) => number_format($record->end_number))
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Created By'),
-               // Tables\Columns\TextColumn::make('created_at')
+                // Tables\Columns\TextColumn::make('created_at')
                 //    ->dateTime(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn(NumberRange $record) => auth()->user()->can('update', $record)),
+                    ->visible(fn (NumberRange $record) => auth()->user()->can('update', $record)),
 
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn(NumberRange $record) => auth()->user()->can('delete', $record))
-                    ->before(fn(NumberRange $record) => app(NumberRangeService::class)->delete($record)),
+                    ->visible(fn (NumberRange $record) => auth()->user()->can('delete', $record))
+                    ->before(fn (NumberRange $record) => app(NumberRangeService::class)->delete($record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn() => auth()->user()->hasRole('super_admin')),
+                        ->visible(fn () => auth()->user()->hasRole('super_admin')),
                 ]),
             ]);
     }
@@ -138,7 +136,7 @@ class NumberRangeResource extends Resource
             return $query;
         }
 
-        $userTeamIds = auth()->user()->teams->flatMap(fn($team) => $team->getAllDescendants()->prepend($team->id));
+        $userTeamIds = auth()->user()->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
 
         return $query->whereIn('team_id', $userTeamIds);
     }
@@ -146,6 +144,7 @@ class NumberRangeResource extends Resource
     protected function mutateFormDataBeforeSave(array $data): array
     {
         app(NumberRangeService::class)->validateRange($data);
+
         return $data;
     }
 
@@ -153,6 +152,7 @@ class NumberRangeResource extends Resource
     {
         $data['created_by'] = auth()->id();
         \Log::info('Creating number range with data:', $data);
+
         return $data;
     }
 }

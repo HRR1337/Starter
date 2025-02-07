@@ -64,13 +64,12 @@ class NumberRange extends Model
     /**
      * Relationship: Parent range (if this is a sub-range).
      */
-
-     public function parent(): BelongsTo
-     {
-         return $this->belongsTo(NumberRange::class, 'parent_id')->withDefault([
-             'name' => '(No Parent)', // Zorgt ervoor dat null een standaardwaarde krijgt
-         ]);
-     }
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(NumberRange::class, 'parent_id')->withDefault([
+            'name' => '(No Parent)', // Zorgt ervoor dat null een standaardwaarde krijgt
+        ]);
+    }
 
     /**
      * Relationship: Children ranges (sub-ranges that derive from this range).
@@ -85,7 +84,7 @@ class NumberRange extends Model
      */
     public function isWithinParent(): bool
     {
-        if (!$this->parent) {
+        if (! $this->parent) {
             return true; // No parent, no restriction
         }
 
@@ -101,11 +100,11 @@ class NumberRange extends Model
         return self::where('parent_id', $this->parent_id)
             ->where(function ($query) {
                 $query->whereBetween('start_number', [$this->start_number, $this->end_number])
-                      ->orWhereBetween('end_number', [$this->start_number, $this->end_number])
-                      ->orWhere(function ($q) {
-                          $q->where('start_number', '<=', $this->start_number)
+                    ->orWhereBetween('end_number', [$this->start_number, $this->end_number])
+                    ->orWhere(function ($q) {
+                        $q->where('start_number', '<=', $this->start_number)
                             ->where('end_number', '>=', $this->end_number);
-                      });
+                    });
             })
             ->where('id', '!=', $this->id) // Ignore self when checking updates
             ->exists();

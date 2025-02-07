@@ -2,16 +2,16 @@
 
 namespace App\Filament\Resources\TeamResource\RelationManagers;
 
-use Filament\Forms;
-use Filament\Tables;
-use Filament\Forms\Form;
-use Filament\Tables\Table;
-use App\Services\NumberRangeService;
 use App\Models\NumberRange;
-use Filament\Resources\RelationManagers\RelationManager;
+use App\Services\NumberRangeService;
+use Filament\Forms;
+use Filament\Forms\Form;
 use Filament\Notifications\Notification;
-use Illuminate\Validation\ValidationException;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
 
 class NumberRangesRelationManager extends RelationManager
 {
@@ -28,13 +28,12 @@ class NumberRangesRelationManager extends RelationManager
                 Forms\Components\Select::make('parent_id')
                     ->label('Parent Range (Optional)')
                     ->relationship('parent', 'description')
-                    ->getOptionLabelFromRecordUsing(fn ($record) => 
-                        sprintf(
-                            '%s (Range: %d-%d)', 
-                            $record->description ?? 'No Description',
-                            $record->range_start,
-                            $record->range_end
-                        )
+                    ->getOptionLabelFromRecordUsing(fn ($record) => sprintf(
+                        '%s (Range: %d-%d)',
+                        $record->description ?? 'No Description',
+                        $record->range_start,
+                        $record->range_end
+                    )
                     )
                     ->searchable()
                     ->preload()
@@ -77,9 +76,8 @@ class NumberRangesRelationManager extends RelationManager
             ->columns([
                 Tables\Columns\TextColumn::make('parent.description')
                     ->label('Parent Range')
-                    ->description(fn (NumberRange $record) => 
-                        $record->parent 
-                            ? "Range: {$record->parent->range_start}-{$record->parent->range_end}" 
+                    ->description(fn (NumberRange $record) => $record->parent
+                            ? "Range: {$record->parent->range_start}-{$record->parent->range_end}"
                             : null
                     )
                     ->sortable(),
@@ -115,7 +113,7 @@ class NumberRangesRelationManager extends RelationManager
                     ->using(function (array $data) {
                         try {
                             $data['team_id'] = $this->getOwnerRecord()->id;
-                            
+
                             // Validate and create using the service
                             return app(NumberRangeService::class)->create($data);
                         } catch (ValidationException $e) {
@@ -135,7 +133,7 @@ class NumberRangesRelationManager extends RelationManager
                         try {
                             $data['team_id'] = $this->getOwnerRecord()->id;
                             app(NumberRangeService::class)->update($record, $data);
-                            
+
                             Notification::make()
                                 ->title('Success')
                                 ->body('Range updated successfully')
@@ -158,7 +156,7 @@ class NumberRangesRelationManager extends RelationManager
                     ->using(function (NumberRange $record) {
                         try {
                             app(NumberRangeService::class)->delete($record);
-                            
+
                             Notification::make()
                                 ->title('Success')
                                 ->body('Range deleted successfully')
@@ -172,6 +170,7 @@ class NumberRangesRelationManager extends RelationManager
                                 ->body($e->getMessage())
                                 ->danger()
                                 ->send();
+
                             return false;
                         }
                     })

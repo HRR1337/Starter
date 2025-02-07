@@ -4,27 +4,31 @@ namespace App\Filament\Pages;
 
 use App\Models\Team;
 use App\Models\User;
-use Filament\Forms\Form;
-use Filament\Pages\Page;
-use Illuminate\Support\Str;
-use Filament\Forms\Components\Section;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\TextInput;
-use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\Hash;
-use Filament\Forms\Components\Wizard;
-use Filament\Notifications\Notification;
-use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Wizard;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 class CreateTeamAdmin extends Page implements HasForms
 {
     use InteractsWithForms;
 
     protected static string $view = 'filament.pages.create-team-admin';
+
     protected static ?string $navigationIcon = 'heroicon-o-user-plus';
+
     protected static ?string $navigationLabel = 'Create Team Admin';
+
     protected static ?string $navigationGroup = 'User Management';
+
     protected static ?string $title = 'Create New Team Admin';
 
     public ?array $data = [];
@@ -75,14 +79,13 @@ class CreateTeamAdmin extends Page implements HasForms
                                 ]),
                         ]),
 
-
                 ])
-                ->submitAction(
-                    Action::make('create')
-                        ->label('Create Team Admin')
-                        ->submit('create')
-                        ->color('primary')
-                )
+                    ->submitAction(
+                        Action::make('create')
+                            ->label('Create Team Admin')
+                            ->submit('create')
+                            ->color('primary')
+                    ),
             ])
             ->statePath('data');
     }

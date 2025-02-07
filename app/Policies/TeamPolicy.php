@@ -2,8 +2,8 @@
 
 namespace App\Policies;
 
-use App\Models\User;
 use App\Models\Team;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
@@ -61,7 +61,7 @@ class TeamPolicy
             return false;
         }
 
-        return $user->can('delete_team') 
+        return $user->can('delete_team')
             && $team->created_by === $user->id;
     }
 

@@ -30,6 +30,7 @@ class ValidTeamHierarchy implements ValidationRule
         // Prevent a team from being its own parent
         if ($this->teamId && $value == $this->teamId) {
             $fail('A team cannot be its own parent.');
+
             return;
         }
 

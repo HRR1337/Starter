@@ -10,10 +10,10 @@ return new class extends Migration
     {
         Schema::table('teams', function (Blueprint $table) {
             $table->foreignId('parent_id')
-                  ->nullable()
-                  ->after('description')
-                  ->constrained('teams')
-                  ->nullOnDelete();
+                ->nullable()
+                ->after('description')
+                ->constrained('teams')
+                ->nullOnDelete();
             $table->string('type')->default('team'); // Could be 'department', 'division', etc.
             $table->integer('level')->default(0); // Hierarchy level
             $table->boolean('is_active')->default(true);

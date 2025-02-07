@@ -17,7 +17,7 @@ class EditUser extends EditRecord
         return [
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => !empty($data['password']) ? $data['password'] : $this->record->password,
+            'password' => ! empty($data['password']) ? $data['password'] : $this->record->password,
         ];
     }
 
@@ -25,7 +25,7 @@ class EditUser extends EditRecord
     {
         return [
             Actions\DeleteAction::make(),
-            Impersonate::make()->record($this->getRecord()) 
+            Impersonate::make()->record($this->getRecord()),
         ];
     }
 
