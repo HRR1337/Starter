@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\NumberRangeResource\Pages;
 
 use App\Filament\Resources\NumberRangeResource;
-use Filament\Resources\Pages\CreateRecord;
 use App\Services\NumberRangeService;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\CreateRecord;
 
 class CreateNumberRange extends CreateRecord
 {

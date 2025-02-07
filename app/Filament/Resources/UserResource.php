@@ -2,17 +2,17 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Forms;
-use App\Models\User;
-use Filament\Tables;
-use App\Models\Team;
-use Filament\Forms\Form;
-use Filament\Tables\Table;
-use Filament\Resources\Resource;
-use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
-use Illuminate\Support\Str;
+use App\Models\Team;
+use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use STS\FilamentImpersonate\Tables\Actions\Impersonate;
 
 class UserResource extends Resource
@@ -47,10 +47,11 @@ class UserResource extends Resource
                             ->required(fn (string $context): bool => $context === 'create')
                             ->maxLength(255),
                         Forms\Components\Select::make('roles')
-                            ->relationship('roles', 'name', function($query) {
-                                if(auth()->user()->hasRole('super_admin')) {
+                            ->relationship('roles', 'name', function ($query) {
+                                if (auth()->user()->hasRole('super_admin')) {
                                     return $query;
                                 }
+
                                 return $query->where('name', 'team_member');
                             })
                             ->multiple()
@@ -65,22 +66,23 @@ class UserResource extends Resource
                             ->schema([
                                 Forms\Components\Select::make('teams')
                                     ->label('Existing Teams')
-                                    ->relationship('teams', 'name', function($query) {
-                                        if(auth()->user()->hasRole('super_admin')) {
+                                    ->relationship('teams', 'name', function ($query) {
+                                        if (auth()->user()->hasRole('super_admin')) {
                                             return $query;
                                         }
+
                                         return $query->whereIn('teams.id', auth()->user()->teams->pluck('id'));
                                     })
                                     ->multiple()
                                     ->preload()
                                     ->searchable(),
-                                
+
                                 Forms\Components\Toggle::make('create_new_team')
                                     ->label('Create New Team')
                                     ->reactive()
                                     ->visible(fn () => auth()->user()->hasRole('super_admin'))
                                     ->dehydrated(false), // Add this line
-                                
+
                                 Forms\Components\TextInput::make('new_team_name')
                                     ->label('New Team Name')
                                     ->visible(fn (callable $get) => $get('create_new_team'))
@@ -91,7 +93,7 @@ class UserResource extends Resource
                                         $set('new_team_slug', Str::slug($state));
                                     })
                                     ->dehydrated(false), // Add this line
-                                
+
                                 Forms\Components\TextInput::make('new_team_slug')
                                     ->label('Team Slug')
                                     ->visible(fn (callable $get) => $get('create_new_team'))
@@ -132,15 +134,16 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-    
+
         // Super admin can see all users
         if (auth()->user()->hasRole('super_admin')) {
             return $query;
         }
-    
+
         // Team admin can see users in their teams except super admins
         if (auth()->user()->hasRole('team_admin')) {
             $teamIds = auth()->user()->teams->pluck('id');
+
             return $query
                 ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
                 ->whereHas('teams', function ($query) use ($teamIds) {
@@ -148,7 +151,7 @@ class UserResource extends Resource
                 })
                 ->where('users.id', '!=', auth()->id());
         }
-    
+
         // Team members can see other users in their teams except super admins
         if (auth()->user()->hasRole('team_member')) {
             if (Filament::getTenant()) {
@@ -159,7 +162,7 @@ class UserResource extends Resource
                     });
             }
         }
-    
+
         // Default: users can only see themselves
         return $query->where('users.id', auth()->id());
     }
@@ -183,7 +186,7 @@ class UserResource extends Resource
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // Zorg ervoor dat team_member rol automatisch wordt toegewezen bij het aanmaken door team_admin
-        if (auth()->user()->hasRole('team_admin') && !isset($data['roles'])) {
+        if (auth()->user()->hasRole('team_admin') && ! isset($data['roles'])) {
             $teamMemberRole = \Spatie\Permission\Models\Role::where('name', 'team_member')->first();
             if ($teamMemberRole) {
                 $data['roles'] = [$teamMemberRole->id];

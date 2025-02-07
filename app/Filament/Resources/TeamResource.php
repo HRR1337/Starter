@@ -5,14 +5,14 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TeamResource\Pages;
 use App\Filament\Resources\TeamResource\RelationManagers;
 use App\Models\Team;
+use App\Rules\ValidTeamHierarchy;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
-use App\Rules\ValidTeamHierarchy;
 
 class TeamResource extends Resource
 {
@@ -33,7 +33,7 @@ class TeamResource extends Resource
     {
         $user = auth()->user();
         $currentTeam = Filament::getTenant();
-    
+
         return $form
             ->schema([
                 Forms\Components\Section::make('Team Details')
@@ -51,6 +51,7 @@ class TeamResource extends Resource
                                 if ($user->hasRole('team_admin')) {
                                     return $query->whereIn('id', $user->teams->pluck('id'));
                                 }
+
                                 return $query;
                             })
                             ->searchable()
@@ -109,13 +110,11 @@ class TeamResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (Team $record) =>
-                        auth()->user()->hasRole('super_admin') ||
+                    ->visible(fn (Team $record) => auth()->user()->hasRole('super_admin') ||
                         $record->created_by === auth()->id()
                     ),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Team $record) =>
-                        auth()->user()->hasRole('super_admin') ||
+                    ->visible(fn (Team $record) => auth()->user()->hasRole('super_admin') ||
                         ($record->created_by === auth()->id() && $record->id !== Filament::getTenant()->id)
                     ),
             ])

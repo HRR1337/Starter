@@ -6,7 +6,6 @@ use App\Models\NumberRange;
 use App\Models\Team;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Filament\Notifications\Notification;
 
 class NumberRangeService
 {
@@ -18,7 +17,7 @@ class NumberRangeService
         // Basis validatie: Start moet kleiner zijn dan End
         if ($data['range_end'] <= $data['range_start']) {
             throw ValidationException::withMessages([
-                'range_end' => "End range ({$data['range_end']}) must be greater than start range ({$data['range_start']})."
+                'range_end' => "End range ({$data['range_end']}) must be greater than start range ({$data['range_start']}).",
             ]);
         }
 
@@ -32,22 +31,22 @@ class NumberRangeService
         $existingRanges = NumberRange::where('team_id', $data['team_id'])
             ->where('id', '!=', $record->id ?? null) // Sluit eigen ID uit bij update
             ->where(function ($query) use ($startNumber, $endNumber) {
-                $query->where(function ($q) use ($startNumber, $endNumber) {
+                $query->where(function ($q) use ($startNumber) {
                     $q->where('start_number', '<=', $startNumber)
-                      ->where('end_number', '>=', $startNumber);
-                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                        ->where('end_number', '>=', $startNumber);
+                })->orWhere(function ($q) use ($endNumber) {
                     $q->where('start_number', '<=', $endNumber)
-                      ->where('end_number', '>=', $endNumber);
+                        ->where('end_number', '>=', $endNumber);
                 })->orWhere(function ($q) use ($startNumber, $endNumber) {
                     $q->where('start_number', '>=', $startNumber)
-                      ->where('end_number', '<=', $endNumber);
+                        ->where('end_number', '<=', $endNumber);
                 });
             })
             ->exists();
 
         if ($existingRanges) {
             throw ValidationException::withMessages([
-                'range_start' => "Your range ({$data['range_start']}-{$data['range_end']}) overlaps with an existing range for the same team."
+                'range_start' => "Your range ({$data['range_start']}-{$data['range_end']}) overlaps with an existing range for the same team.",
             ]);
         }
 
@@ -55,24 +54,24 @@ class NumberRangeService
         if ($team->parent_id) {
             // Fetch ALL number ranges for the parent team
             $parentTeamRanges = NumberRange::where('team_id', $team->parent_id)->get();
-            
+
             $isWithinParentRange = false;
-        
+
             foreach ($parentTeamRanges as $parentRange) {
                 if ($startNumber >= $parentRange->start_number && $endNumber <= $parentRange->end_number) {
                     $isWithinParentRange = true;
                     break;
                 }
             }
-        
-            if (!$isWithinParentRange) {
+
+            if (! $isWithinParentRange) {
                 throw ValidationException::withMessages([
                     'range_start' => sprintf(
                         'Your range (%d-%d) must be within at least one of your parent team\'s ranges: %s',
                         $data['range_start'],
                         $data['range_end'],
                         $parentTeamRanges->map(fn ($r) => sprintf('%d-%d', floor($r->start_number / 1000), floor($r->end_number / 1000)))->implode(', ')
-                    )
+                    ),
                 ]);
             }
         }
@@ -85,19 +84,19 @@ class NumberRangeService
                 $query->whereNull('parent_id');
             }
         })->where('id', '!=', $team->id)
-          ->pluck('id');
+            ->pluck('id');
 
         $overlappingSiblingRanges = NumberRange::whereIn('team_id', $siblingTeamIds)
             ->where(function ($query) use ($startNumber, $endNumber) {
-                $query->where(function ($q) use ($startNumber, $endNumber) {
+                $query->where(function ($q) use ($startNumber) {
                     $q->where('start_number', '<=', $startNumber)
-                      ->where('end_number', '>=', $startNumber);
-                })->orWhere(function ($q) use ($startNumber, $endNumber) {
+                        ->where('end_number', '>=', $startNumber);
+                })->orWhere(function ($q) use ($endNumber) {
                     $q->where('start_number', '<=', $endNumber)
-                      ->where('end_number', '>=', $endNumber);
+                        ->where('end_number', '>=', $endNumber);
                 })->orWhere(function ($q) use ($startNumber, $endNumber) {
                     $q->where('start_number', '>=', $startNumber)
-                      ->where('end_number', '<=', $endNumber);
+                        ->where('end_number', '<=', $endNumber);
                 });
             });
 
@@ -114,14 +113,14 @@ class NumberRangeService
                     'Your range (%d-%d) overlaps with existing range %d-%d from team %s',
                     $data['range_start'],
                     $data['range_end'],
-                    floor($range->start_number/1000),
-                    floor($range->end_number/1000),
+                    floor($range->start_number / 1000),
+                    floor($range->end_number / 1000),
                     $range->team->name
                 );
             }
-            
+
             throw ValidationException::withMessages([
-                'range_start' => $messages[0]
+                'range_start' => $messages[0],
             ]);
         }
     }
@@ -132,12 +131,12 @@ class NumberRangeService
     public function create(array $data): NumberRange
     {
         try {
-            if (!isset($data['created_by'])) {
+            if (! isset($data['created_by'])) {
                 $data['created_by'] = auth()->id();
             }
 
             $this->validateRange($data);
-            
+
             return DB::transaction(function () use ($data) {
                 return NumberRange::create([
                     'team_id' => $data['team_id'],
@@ -181,7 +180,7 @@ class NumberRangeService
     {
         if ($numberRange->children()->exists()) {
             throw ValidationException::withMessages([
-                'delete' => 'Cannot delete a range that has sub-ranges.'
+                'delete' => 'Cannot delete a range that has sub-ranges.',
             ]);
         }
 

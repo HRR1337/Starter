@@ -2,8 +2,8 @@
 
 namespace App\Policies;
 
-use App\Models\User;
 use App\Models\NumberRange;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class NumberRangePolicy
@@ -27,10 +27,10 @@ class NumberRangePolicy
         if ($user->hasRole('super_admin')) {
             return true;
         }
-    
+
         // Haal alle teams op waar de user team_admin van is (inclusief subteams)
         $userTeamIds = $user->teams->flatMap(fn ($team) => $team->getAllDescendants()->prepend($team->id));
-    
+
         // Controleer of de NumberRange binnen deze teams valt
         return $user->hasRole('team_admin') && $userTeamIds->contains($numberRange->team_id);
     }

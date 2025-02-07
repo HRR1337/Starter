@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +20,7 @@ class Team extends Model
         'parent_id',
         'type',
         'level',
-        'is_active'
+        'is_active',
     ];
 
     protected $casts = [
@@ -76,7 +76,7 @@ class Team extends Model
      */
     public function getAllDescendants(): Collection
     {
-        $results = DB::select("
+        $results = DB::select('
             WITH RECURSIVE team_tree AS (
                 SELECT id, parent_id FROM teams WHERE id = ?
                 UNION ALL
@@ -84,9 +84,9 @@ class Team extends Model
                 INNER JOIN team_tree tt ON t.parent_id = tt.id
             )
             SELECT * FROM team_tree WHERE id != ?
-        ", [$this->id, $this->id]);
-    
-        return collect($results); 
+        ', [$this->id, $this->id]);
+
+        return collect($results);
     }
 
     /**
@@ -205,17 +205,17 @@ class Team extends Model
     }
 
     public function users(): BelongsToMany
-{
-    return $this->belongsToMany(User::class)->withTimestamps();
-}
+    {
+        return $this->belongsToMany(User::class)->withTimestamps();
+    }
 
-public function numberRanges(): HasMany
-{
-    return $this->hasMany(NumberRange::class, 'team_id');
-}
+    public function numberRanges(): HasMany
+    {
+        return $this->hasMany(NumberRange::class, 'team_id');
+    }
 
-public function createdBy(): BelongsTo
-{
-    return $this->belongsTo(User::class, 'created_by');
-}
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

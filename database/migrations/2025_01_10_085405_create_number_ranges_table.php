@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('description')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamps();
-    
+
             // Add index for faster range lookups
             $table->index(['start_number', 'end_number']);
         });
